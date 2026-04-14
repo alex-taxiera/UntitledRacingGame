@@ -39,6 +39,17 @@ public:
     UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Perks")
     TArray<FName> UnlockedPerkIDs;
 
+    /**
+     * The currently equipped skill perks, in slot order.
+     * Only effects from these perks are applied in battle — unlocking a skill
+     * perk does not automatically activate it.
+     *
+     * Length is capped at GetSkillSlotCount() at the time of equipping.
+     * Saved for the player; for NPCs this is set directly from UNPCRacerData.
+     */
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Perks")
+    TArray<FName> EquippedSkillPerkIDs;
+
     // -----------------------------------------------------------------------
     // Unlock state
     // -----------------------------------------------------------------------
@@ -53,6 +64,49 @@ public:
      * Use this for NPC setup or for the player manager after validation passes.
      */
     void AddPerk(FName PerkID);
+
+    // -----------------------------------------------------------------------
+    // Skill Slots & Equipping
+    // -----------------------------------------------------------------------
+
+    /**
+     * Returns the total number of skill slots available to this driver.
+     * = BaseSlots + sum of all SkillSlotIncrease passive effects from UNLOCKED perks
+     *   (slot-increase perks always apply regardless of the equipped set, since
+     *    equipping them would use up a slot they are meant to provide).
+     *
+     * @param AllPerks   Full perk catalogue.
+     * @param BaseSlots  The starting slot count from the game mode / difficulty.
+     */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "CharacterPerkState")
+    int32 GetSkillSlotCount(const TArray<UPerkData*>& AllPerks, int32 BaseSlots) const;
+
+    /** Returns true if the given perk ID is currently in the equipped set. */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "CharacterPerkState")
+    bool IsSkillEquipped(FName PerkID) const;
+
+    /**
+     * Returns true if the skill can be equipped:
+     *   - The perk is unlocked.
+     *   - The perk is a Driver-tree skill perk (has effects or a custom class).
+     *   - It is not already equipped.
+     *   - There is at least one free slot.
+     */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "CharacterPerkState")
+    bool CanEquipSkill(FName PerkID, const TArray<UPerkData*>& AllPerks, int32 BaseSlots) const;
+
+    /**
+     * Equips the skill into the next available slot.
+     * Does NOT validate cost — call CanEquipSkill first.
+     * Returns true if the skill was successfully equipped.
+     */
+    bool EquipSkill(FName PerkID, const TArray<UPerkData*>& AllPerks, int32 BaseSlots);
+
+    /**
+     * Removes the skill from the equipped set.
+     * Returns true if it was equipped and has now been removed.
+     */
+    bool UnequipSkill(FName PerkID);
 
     // -----------------------------------------------------------------------
     // Stat computation
@@ -78,27 +132,27 @@ public:
     int32 ComputeLevel(const TArray<UPerkData*>& AllPerks) const;
 
     // -----------------------------------------------------------------------
-    // Effect queries
+    // Effect queries  (draw only from EquippedSkillPerkIDs)
     // -----------------------------------------------------------------------
 
     /**
-     * Returns all passive FPerkSkillEffect entries across every unlocked perk.
-     * Used by the battle system to build the permanent modifier list at race start.
+     * Returns all passive FPerkSkillEffect entries from EQUIPPED skill perks only.
+     * Unlocked-but-unequipped skills contribute no effects.
+     * SkillSlotIncrease effects are intentionally excluded here; use
+     * GetSkillSlotCount() to account for those.
      */
     UFUNCTION(BlueprintCallable, Category = "CharacterPerkState")
     TArray<FPerkSkillEffect> GetAllPassiveEffects(const TArray<UPerkData*>& AllPerks) const;
 
     /**
-     * Returns all active (non-passive) FPerkSkillEffect entries across every
-     * unlocked perk.  Applied at race start, removed after their Duration.
+     * Returns all active (non-passive) FPerkSkillEffect entries from EQUIPPED
+     * skill perks only.  Applied at race start, removed after their Duration.
      */
     UFUNCTION(BlueprintCallable, Category = "CharacterPerkState")
     TArray<FPerkSkillEffect> GetAllActiveEffects(const TArray<UPerkData*>& AllPerks) const;
 
     /**
-     * Returns the soft class pointers for any custom Blueprint effect classes
-     * from unlocked perks.  The battle system instantiates these and calls
-     * ApplyEffect on each one.
+     * Returns custom Blueprint effect class pointers from EQUIPPED skill perks only.
      */
     UFUNCTION(BlueprintCallable, Category = "CharacterPerkState")
     TArray<TSoftClassPtr<UPerkSkillEffect>> GetAllCustomEffectClasses(

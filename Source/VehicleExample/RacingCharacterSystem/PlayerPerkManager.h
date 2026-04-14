@@ -12,8 +12,9 @@
 
 class UVehicleDefinition;
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnPerkUnlocked,       UPerkData*, Perk);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSkillPointsChanged, int32,      NewTotal);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnPerkUnlocked,          UPerkData*, Perk);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSkillPointsChanged,    int32,      NewTotal);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnEquippedSkillsChanged);
 
 /**
  * UPlayerPerkManager
@@ -57,6 +58,14 @@ public:
     UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Economy")
     int32 SkillPointBank = 0;
 
+    /**
+     * The baseline number of skill slots before any SkillSlotIncrease perk bonuses.
+     * Set this from the game mode or difficulty level before the session starts.
+     * Default is 3 — a reasonable starting point for most configurations.
+     */
+    UPROPERTY(SaveGame, EditAnywhere, BlueprintReadWrite, Category = "Skills")
+    int32 BaseSkillSlots = 3;
+
     /** The player's unlocked perk set and derived stat state. */
     UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Perks")
     TObjectPtr<UCharacterPerkState> PerkState;
@@ -78,6 +87,9 @@ public:
 
     UPROPERTY(BlueprintAssignable, Category = "Events")
     FOnSkillPointsChanged OnSkillPointsChanged;
+
+    UPROPERTY(BlueprintAssignable, Category = "Events")
+    FOnEquippedSkillsChanged OnEquippedSkillsChanged;
 
     // -----------------------------------------------------------------------
     // Initialisation  (called by URacingGameInstance::Init)
@@ -125,6 +137,42 @@ public:
     /** Returns true if the given story flag has been achieved. */
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "PlayerPerkManager")
     bool HasStoryFlag(FName Flag) const;
+
+    // -----------------------------------------------------------------------
+    // Skill Equipping
+    // -----------------------------------------------------------------------
+
+    /** Returns the total skill slot count (BaseSkillSlots + any SkillSlotIncrease bonuses). */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "PlayerPerkManager")
+    int32 GetSkillSlotCount() const;
+
+    /** Returns true if the given skill perk is currently equipped. */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "PlayerPerkManager")
+    bool IsSkillEquipped(FName PerkID) const;
+
+    /**
+     * Returns true if the skill can be equipped:
+     *   - Perk is unlocked, is a Driver skill perk, is not already equipped,
+     *     and a free slot is available.
+     */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "PlayerPerkManager")
+    bool CanEquipSkill(UPerkData* Perk) const;
+
+    /**
+     * Equips the skill into the next available slot.
+     * Broadcasts OnEquippedSkillsChanged on success.
+     * Returns true if the skill was equipped.
+     */
+    UFUNCTION(BlueprintCallable, Category = "PlayerPerkManager")
+    bool EquipSkill(UPerkData* Perk);
+
+    /**
+     * Removes the skill from the equipped set.
+     * Broadcasts OnEquippedSkillsChanged on success.
+     * Returns true if the skill was previously equipped.
+     */
+    UFUNCTION(BlueprintCallable, Category = "PlayerPerkManager")
+    bool UnequipSkill(UPerkData* Perk);
 
     // -----------------------------------------------------------------------
     // Shop Filter Queries

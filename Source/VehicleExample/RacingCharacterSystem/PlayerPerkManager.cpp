@@ -111,6 +111,43 @@ bool UPlayerPerkManager::IsPartLevelPurchasable(EPartSlot Slot, int32 Level) con
 }
 
 // ---------------------------------------------------------------------------
+// Skill Equipping
+// ---------------------------------------------------------------------------
+
+int32 UPlayerPerkManager::GetSkillSlotCount() const
+{
+    if (!PerkState) { return BaseSkillSlots; }
+    return PerkState->GetSkillSlotCount(GetRawPerkArray(), BaseSkillSlots);
+}
+
+bool UPlayerPerkManager::IsSkillEquipped(FName PerkID) const
+{
+    return PerkState && PerkState->IsSkillEquipped(PerkID);
+}
+
+bool UPlayerPerkManager::CanEquipSkill(UPerkData* Perk) const
+{
+    if (!Perk || !PerkState) { return false; }
+    return PerkState->CanEquipSkill(Perk->PerkID, GetRawPerkArray(), BaseSkillSlots);
+}
+
+bool UPlayerPerkManager::EquipSkill(UPerkData* Perk)
+{
+    if (!Perk || !PerkState) { return false; }
+    if (!PerkState->EquipSkill(Perk->PerkID, GetRawPerkArray(), BaseSkillSlots)) { return false; }
+    OnEquippedSkillsChanged.Broadcast();
+    return true;
+}
+
+bool UPlayerPerkManager::UnequipSkill(UPerkData* Perk)
+{
+    if (!Perk || !PerkState) { return false; }
+    if (!PerkState->UnequipSkill(Perk->PerkID)) { return false; }
+    OnEquippedSkillsChanged.Broadcast();
+    return true;
+}
+
+// ---------------------------------------------------------------------------
 // Convenience wrappers
 // ---------------------------------------------------------------------------
 

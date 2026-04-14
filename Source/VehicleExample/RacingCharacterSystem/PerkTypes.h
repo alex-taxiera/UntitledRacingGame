@@ -87,6 +87,13 @@ enum class ESkillEffectType : uint8
     WalletSizeIncrease          UMETA(DisplayName = "Wallet Size Increase"),
 
     /**
+     * Increases the number of skill slots available to the driver.
+     * Magnitude = whole number of additional slots granted (e.g. 1.0 = +1 slot).
+     * Must be a passive effect (bIsPassive = true).
+     */
+    SkillSlotIncrease           UMETA(DisplayName = "Skill Slot Increase"),
+
+    /**
      * Effect logic is implemented entirely in a Blueprint UPerkSkillEffect subclass.
      * The C++ battle system will invoke OnEffectApplied / OnEffectRemoved on the object.
      */
@@ -180,4 +187,13 @@ struct FDriverStatBlock
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Stats")
     int32 Toughness = 0;
+
+    /**
+     * How many skill perks can be equipped simultaneously.
+     * This is the base value before any SkillSlotIncrease perk effects are applied.
+     * Set by the game mode or difficulty context, not stored in the stat block directly —
+     * this field reflects the resolved total after all slot-increase effects.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Stats")
+    int32 SkillSlots = 3;
 };

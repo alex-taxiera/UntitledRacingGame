@@ -80,6 +80,26 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Perks")
     TArray<FName> PerkIDs;
 
+    /**
+     * Which of the PerkIDs above are actively equipped in skill slots.
+     * Only effects from these perks apply in battle.
+     * Every entry here must also appear in PerkIDs.
+     *
+     * For NPCs there is no hard slot-count enforcement — the designer is
+     * responsible for keeping this list at or below the intended slot count.
+     * The count is informational: BaseSkillSlots + any SkillSlotIncrease perks
+     * in PerkIDs determines what "should" fit.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Perks")
+    TArray<FName> EquippedSkillPerkIDs;
+
+    /**
+     * The baseline skill slot count for this NPC.
+     * Used only for display / difficulty gauging; not enforced at runtime.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Perks")
+    int32 BaseSkillSlots = 3;
+
     // -----------------------------------------------------------------------
     // Vehicle Configuration
     // -----------------------------------------------------------------------

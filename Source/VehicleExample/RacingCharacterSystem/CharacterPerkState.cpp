@@ -62,14 +62,17 @@ int32 UCharacterPerkState::ComputeLevel(const TArray<UPerkData*>& AllPerks) cons
 }
 
 // ---------------------------------------------------------------------------
-// Effect queries
+// Skill Slots & Equipping
 // ---------------------------------------------------------------------------
 
-TArray<FPerkSkillEffect> UCharacterPerkState::GetAllPassiveEffects(
-    const TArray<UPerkData*>& AllPerks) const
+int32 UCharacterPerkState::GetSkillSlotCount(const TArray<UPerkData*>& AllPerks,
+                                              int32 BaseSlots) const
 {
-    TArray<FPerkSkillEffect> Out;
+    int32 Total = BaseSlots;
 
+    // SkillSlotIncrease effects from ALL unlocked perks count, not just equipped ones.
+    // This prevents a chicken-and-egg problem where you need a slot to equip
+    // the perk that gives you the extra slot.
     for (const FName& PerkID : UnlockedPerkIDs)
     {
         UPerkData* Perk = FindPerk(AllPerks, PerkID);
@@ -77,7 +80,70 @@ TArray<FPerkSkillEffect> UCharacterPerkState::GetAllPassiveEffects(
 
         for (const FPerkSkillEffect& Effect : Perk->GetAllEffects())
         {
-            if (Effect.bIsPassive)
+            if (Effect.bIsPassive && Effect.EffectType == ESkillEffectType::SkillSlotIncrease)
+            {
+                Total += FMath::FloorToInt(Effect.Magnitude);
+            }
+        }
+    }
+
+    return FMath::Max(0, Total);
+}
+
+bool UCharacterPerkState::IsSkillEquipped(FName PerkID) const
+{
+    return EquippedSkillPerkIDs.Contains(PerkID);
+}
+
+bool UCharacterPerkState::CanEquipSkill(FName PerkID, const TArray<UPerkData*>& AllPerks,
+                                         int32 BaseSlots) const
+{
+    if (!HasPerk(PerkID)) { return false; }
+    if (IsSkillEquipped(PerkID)) { return false; }
+
+    UPerkData* Perk = FindPerk(AllPerks, PerkID);
+    if (!Perk) { return false; }
+
+    // Only Driver-tree skill perks (perks with effects or a custom class) can be equipped.
+    // Stat perks, vehicle perks, and tuning perks are passive by nature and never equipped.
+    const bool bIsSkillPerk = (Perk->Tree == EPerkTree::Driver) &&
+        (Perk->SkillPayload.Effects.Num() > 0 || !Perk->SkillPayload.CustomEffectClass.IsNull());
+    if (!bIsSkillPerk) { return false; }
+
+    return EquippedSkillPerkIDs.Num() < GetSkillSlotCount(AllPerks, BaseSlots);
+}
+
+bool UCharacterPerkState::EquipSkill(FName PerkID, const TArray<UPerkData*>& AllPerks,
+                                      int32 BaseSlots)
+{
+    if (!CanEquipSkill(PerkID, AllPerks, BaseSlots)) { return false; }
+    EquippedSkillPerkIDs.Add(PerkID);
+    return true;
+}
+
+bool UCharacterPerkState::UnequipSkill(FName PerkID)
+{
+    return EquippedSkillPerkIDs.Remove(PerkID) > 0;
+}
+
+// ---------------------------------------------------------------------------
+// Effect queries  (draw only from EquippedSkillPerkIDs)
+// ---------------------------------------------------------------------------
+
+TArray<FPerkSkillEffect> UCharacterPerkState::GetAllPassiveEffects(
+    const TArray<UPerkData*>& AllPerks) const
+{
+    TArray<FPerkSkillEffect> Out;
+
+    for (const FName& PerkID : EquippedSkillPerkIDs)
+    {
+        UPerkData* Perk = FindPerk(AllPerks, PerkID);
+        if (!Perk) { continue; }
+
+        for (const FPerkSkillEffect& Effect : Perk->GetAllEffects())
+        {
+            // SkillSlotIncrease is accounted for separately in GetSkillSlotCount.
+            if (Effect.bIsPassive && Effect.EffectType != ESkillEffectType::SkillSlotIncrease)
             {
                 Out.Add(Effect);
             }
@@ -92,7 +158,7 @@ TArray<FPerkSkillEffect> UCharacterPerkState::GetAllActiveEffects(
 {
     TArray<FPerkSkillEffect> Out;
 
-    for (const FName& PerkID : UnlockedPerkIDs)
+    for (const FName& PerkID : EquippedSkillPerkIDs)
     {
         UPerkData* Perk = FindPerk(AllPerks, PerkID);
         if (!Perk) { continue; }
@@ -114,7 +180,7 @@ TArray<TSoftClassPtr<UPerkSkillEffect>> UCharacterPerkState::GetAllCustomEffectC
 {
     TArray<TSoftClassPtr<UPerkSkillEffect>> Out;
 
-    for (const FName& PerkID : UnlockedPerkIDs)
+    for (const FName& PerkID : EquippedSkillPerkIDs)
     {
         UPerkData* Perk = FindPerk(AllPerks, PerkID);
         if (!Perk) { continue; }

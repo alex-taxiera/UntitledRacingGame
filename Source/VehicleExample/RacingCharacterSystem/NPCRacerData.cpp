@@ -16,6 +16,11 @@ UCharacterPerkState* UNPCRacerData::CreatePerkState(UObject* Outer) const
         State->AddPerk(ID);
     }
 
+    for (const FName& ID : EquippedSkillPerkIDs)
+    {
+        State->EquippedSkillPerkIDs.Add(ID);
+    }
+
     return State;
 }
 
