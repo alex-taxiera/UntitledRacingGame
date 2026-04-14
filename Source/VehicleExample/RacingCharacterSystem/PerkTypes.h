@@ -5,6 +5,9 @@
 #include "CoreMinimal.h"
 #include "PerkTypes.generated.h"
 
+// Forward declaration — PerkSkillEffect.h is not included here to avoid circular deps.
+class UPerkSkillEffect;
+
 // ---------------------------------------------------------------------------
 // Perk Trees
 // ---------------------------------------------------------------------------
@@ -196,4 +199,135 @@ struct FDriverStatBlock
      */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Stats")
     int32 SkillSlots = 3;
+};
+
+// ---------------------------------------------------------------------------
+// Racer Battle State
+// ---------------------------------------------------------------------------
+
+/**
+ * Runtime state for one racer during a battle.
+ * Holds everything URaceBattleManager needs to track health, resolve damage,
+ * manage live effects, and answer display queries.
+ *
+ * Not saved — rebuilt fresh at the start of each race.
+ */
+USTRUCT(BlueprintType)
+struct FRacerBattleState
+{
+    GENERATED_BODY()
+
+    /** Name shown in the battle UI for this racer. */
+    UPROPERTY(BlueprintReadOnly, Category = "Battle")
+    FText DisplayName;
+
+    /** Fully resolved combat stats for this racer (base + all perk bonuses). */
+    UPROPERTY(BlueprintReadOnly, Category = "Battle")
+    FDriverStatBlock ResolvedStats;
+
+    /** Maximum health for this battle, derived from ResolvedStats.Health. */
+    UPROPERTY(BlueprintReadOnly, Category = "Battle")
+    float MaxHealth = 0.0f;
+
+    /** Current health. Starts at MaxHealth; battle ends when this reaches 0. */
+    UPROPERTY(BlueprintReadOnly, Category = "Battle")
+    float CurrentHealth = 0.0f;
+
+    /**
+     * Passive effects active for the entire race.
+     * Populated from CharacterPerkState::GetAllPassiveEffects at battle start.
+     * Does not include SkillSlotIncrease (handled by the perk manager).
+     */
+    UPROPERTY(BlueprintReadOnly, Category = "Battle")
+    TArray<FPerkSkillEffect> PassiveEffects;
+
+    /**
+     * Timed effects currently running (applied at race start, expire after Duration).
+     * Entries are removed when their elapsed time exceeds Duration.
+     */
+    UPROPERTY(BlueprintReadOnly, Category = "Battle")
+    TArray<FPerkSkillEffect> ActiveTimedEffects;
+
+    /**
+     * Elapsed time in seconds for each entry in ActiveTimedEffects (parallel array).
+     * Incremented every Tick; entry is removed when elapsed >= effect Duration.
+     */
+    UPROPERTY(BlueprintReadOnly, Category = "Battle")
+    TArray<float> TimedEffectElapsed;
+
+    /**
+     * Instantiated Blueprint custom effect objects for this racer.
+     * Created at battle start from CharacterPerkState::GetAllCustomEffectClasses.
+     * ApplyEffect has already been called on each one.
+     */
+    UPROPERTY(BlueprintReadOnly, Category = "Battle")
+    TArray<TObjectPtr<UPerkSkillEffect>> LiveCustomEffects;
+
+    /**
+     * The perk IDs of equipped skill perks, copied at battle start for display.
+     * Used by URaceBattleManager::GetEquippedSkillNames.
+     */
+    UPROPERTY(BlueprintReadOnly, Category = "Battle")
+    TArray<FName> EquippedSkillPerkIDs;
+
+    // -----------------------------------------------------------------------
+    // Helpers
+    // -----------------------------------------------------------------------
+
+    /** Returns the sum of all passive DamageReduction magnitudes for this racer. */
+    float GetTotalDamageReduction() const
+    {
+        float Total = 0.0f;
+        for (const FPerkSkillEffect& E : PassiveEffects)
+        {
+            if (E.bIsPassive && E.EffectType == ESkillEffectType::DamageReduction)
+            {
+                Total += E.Magnitude;
+            }
+        }
+        // Also check timed effects still running
+        for (const FPerkSkillEffect& E : ActiveTimedEffects)
+        {
+            if (E.EffectType == ESkillEffectType::DamageReduction)
+            {
+                Total += E.Magnitude;
+            }
+        }
+        return Total;
+    }
+
+    /** Returns the sum of all passive/timed WallDamageReduction magnitudes. */
+    float GetTotalWallDamageReduction() const
+    {
+        float Total = 0.0f;
+        for (const FPerkSkillEffect& E : PassiveEffects)
+        {
+            if (E.bIsPassive && E.EffectType == ESkillEffectType::WallDamageReduction)
+            {
+                Total += E.Magnitude;
+            }
+        }
+        for (const FPerkSkillEffect& E : ActiveTimedEffects)
+        {
+            if (E.EffectType == ESkillEffectType::WallDamageReduction)
+            {
+                Total += E.Magnitude;
+            }
+        }
+        return Total;
+    }
+
+    /** Returns the total HealthOnNitro heal amount across all active effects. */
+    float GetTotalHealthOnNitro() const
+    {
+        float Total = 0.0f;
+        for (const FPerkSkillEffect& E : PassiveEffects)
+        {
+            if (E.bIsPassive && E.EffectType == ESkillEffectType::HealthOnNitro)
+            {
+                Total += E.Magnitude;
+            }
+        }
+        return Total;
+    }
 };
