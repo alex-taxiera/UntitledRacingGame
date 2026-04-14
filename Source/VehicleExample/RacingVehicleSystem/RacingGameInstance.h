@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Engine/GameInstance.h"
 #include "VehicleInventory.h"
+#include "PlayerPerkManager.h"
 #include "RacingGameInstance.generated.h"
 
 /**
@@ -48,6 +49,18 @@ public:
     /** Returns the VehicleInventory. Never null after game start. */
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Racing")
     UVehicleInventory* GetVehicleInventory() const { return VehicleInventory; }
+
+    /**
+     * The player's perk manager.  Always valid after Init().
+     * Holds the perk catalogue, skill point bank, and unlocked perk state.
+     * Populate AllPerks from the Blueprint defaults of this GameInstance asset.
+     */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Racing")
+    TObjectPtr<UPlayerPerkManager> PerkManager;
+
+    /** Returns the PerkManager. Never null after game start. */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Racing")
+    UPlayerPerkManager* GetPerkManager() const { return PerkManager; }
 
     // -----------------------------------------------------------------------
     // UGameInstance interface

@@ -2,6 +2,7 @@
 
 #include "RacingGameInstance.h"
 #include "Kismet/GameplayStatics.h"
+#include "PlayerPerkManager.h"
 
 URacingGameInstance::URacingGameInstance()
 {
@@ -12,6 +13,9 @@ void URacingGameInstance::Init()
     Super::Init();
 
     VehicleInventory = NewObject<UVehicleInventory>(this, TEXT("VehicleInventory"));
+
+    PerkManager = NewObject<UPlayerPerkManager>(this, TEXT("PerkManager"));
+    PerkManager->Initialise();
 }
 
 URacingGameInstance* URacingGameInstance::Get(const UObject* WorldContextObject)

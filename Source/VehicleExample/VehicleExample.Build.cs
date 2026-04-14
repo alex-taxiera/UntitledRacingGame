@@ -27,7 +27,8 @@ public class VehicleExample : ModuleRules
 			"VehicleExample/Variant_Offroad",
 			"VehicleExample/Variant_TimeTrial",
 			"VehicleExample/Variant_TimeTrial/UI",
-			"VehicleExample/RacingVehicleSystem"
+			"VehicleExample/RacingVehicleSystem",
+			"VehicleExample/RacingCharacterSystem"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });
