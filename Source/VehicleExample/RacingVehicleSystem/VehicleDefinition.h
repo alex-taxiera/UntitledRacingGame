@@ -89,6 +89,10 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Stats")
     FEngineDefinition EngineDefinition;
 
+    /** Drivetrain layout — controls which tuning sections (e.g. front LSD, torque balance) are available. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drivetrain")
+    EDrivetrainType DrivetrainType = EDrivetrainType::RWD;
+
     // -----------------------------------------------------------------------
     // Parts
     // -----------------------------------------------------------------------
@@ -119,6 +123,56 @@ public:
     TArray<FGearRatioSpec> DefaultGearRatios;
 
     // -----------------------------------------------------------------------
+    // Tuning Definitions
+    // All ranges and unlock gates are set here by designers.
+    // -----------------------------------------------------------------------
+
+    /**
+     * Wheel alignment tuning ranges (camber, toe, ride height, offset, tire width).
+     * Alignment/ride-height/offset unlock via Suspension level; tire width via Tire level.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tuning|Alignment")
+    FAlignmentTuningDef AlignmentTuning;
+
+    /** Brake tuning ranges (ABS toggle, brake balance). Unlocks via Brake level. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tuning|Brakes")
+    FBrakeTuningDef BrakeTuning;
+
+    /**
+     * Rear differential LSD tuning.
+     * Available on RWD and AWD vehicles (always populated when LSD slot is present).
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tuning|LSD")
+    FLSDTuningDef RearLSDTuning;
+
+    /**
+     * Front differential LSD tuning.
+     * Only relevant for AWD vehicles — ignored on FWD/RWD.
+     * Leave defaults if not applicable; the UI gates visibility on DrivetrainType.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tuning|LSD")
+    FLSDTuningDef FrontLSDTuning;
+
+    /** Suspension tuning ranges (spring rate, damper, damper balance). Unlocks via Suspension level. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tuning|Suspension")
+    FSuspensionTuningDef SuspensionTuning;
+
+    /**
+     * Stabilizer (anti-roll bar) tuning ranges.
+     * Displayed separately in UI but shares the same Suspension-level unlock gate
+     * as SuspensionTuning (uses SuspensionTuning.MinSuspensionLevelForTuning).
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tuning|Stabilizer")
+    FStabilizerTuningDef StabilizerTuning;
+
+    /**
+     * Front-to-rear torque balance tuning (AWD only).
+     * The UI should only expose this when DrivetrainType == AWD.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tuning|TorqueBalance")
+    FTorqueBalanceDef TorqueBalance;
+
+    // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
 
@@ -133,6 +187,10 @@ public:
         const TObjectPtr<UVehiclePartData>* Found = AvailableParts.Find(Slot);
         return Found ? Found->Get() : nullptr;
     }
+
+    /** Returns true when this vehicle is AWD and therefore exposes front LSD and torque balance tuning. */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "VehicleDefinition")
+    bool IsAWD() const { return DrivetrainType == EDrivetrainType::AWD; }
 
     /**
      * Returns the GearRatioSpec for the given zero-based gear index.

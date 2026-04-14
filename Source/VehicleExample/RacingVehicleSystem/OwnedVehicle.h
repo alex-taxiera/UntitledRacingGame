@@ -72,6 +72,40 @@ public:
     TArray<float> TunedGearRatios;
 
     // -----------------------------------------------------------------------
+    // Tuning State  (all saved per instance, set from the garage tuning screen)
+    // -----------------------------------------------------------------------
+
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Tuning")
+    FAlignmentTuningState AlignmentTuning;
+
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Tuning")
+    FBrakeTuningState BrakeTuning;
+
+    /** Rear differential LSD tuning (RWD and AWD). */
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Tuning")
+    FLSDTuningState RearLSDTuning;
+
+    /**
+     * Front differential LSD tuning.
+     * Only meaningful when Definition->IsAWD() is true.
+     */
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Tuning")
+    FLSDTuningState FrontLSDTuning;
+
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Tuning")
+    FSuspensionTuningState SuspensionTuning;
+
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Tuning")
+    FStabilizerTuningState StabilizerTuning;
+
+    /**
+     * Torque balance (AWD only).
+     * FrontBias is a whole-number percentage; rear = 100 - FrontBias.
+     */
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Tuning")
+    FTorqueBalanceState TorqueBalance;
+
+    // -----------------------------------------------------------------------
     // Nitro State  (runtime only — refilled during races)
     // -----------------------------------------------------------------------
 
@@ -151,6 +185,142 @@ public:
      */
     UFUNCTION(BlueprintCallable, Category = "OwnedVehicle")
     FEffectiveVehicleStats ComputeEffectiveStats() const;
+
+    // -----------------------------------------------------------------------
+    // Tuning Unlock Queries
+    // -----------------------------------------------------------------------
+
+    /** Returns true when alignment tuning (camber/toe/ride height/offset) is unlocked. */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "OwnedVehicle|Tuning")
+    bool IsAlignmentTuningUnlocked() const;
+
+    /** Returns true when tire-width tuning is unlocked. */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "OwnedVehicle|Tuning")
+    bool IsTireWidthTuningUnlocked() const;
+
+    /** Returns true when brake tuning (ABS, balance) is unlocked. */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "OwnedVehicle|Tuning")
+    bool IsBrakeTuningUnlocked() const;
+
+    /** Returns true when rear LSD tuning is unlocked. */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "OwnedVehicle|Tuning")
+    bool IsRearLSDTuningUnlocked() const;
+
+    /**
+     * Returns true when front LSD tuning is unlocked.
+     * Always false on non-AWD vehicles regardless of LSD level.
+     */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "OwnedVehicle|Tuning")
+    bool IsFrontLSDTuningUnlocked() const;
+
+    /** Returns true when suspension tuning (spring rate, damper) is unlocked. */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "OwnedVehicle|Tuning")
+    bool IsSuspensionTuningUnlocked() const;
+
+    /**
+     * Returns true when stabilizer tuning is unlocked.
+     * Shares the same Suspension-level gate as IsSuspensionTuningUnlocked().
+     */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "OwnedVehicle|Tuning")
+    bool IsStabilizerTuningUnlocked() const;
+
+    /**
+     * Returns true when torque balance tuning is available.
+     * Requires AWD drivetrain — no additional part level gate.
+     */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "OwnedVehicle|Tuning")
+    bool IsTorqueBalanceTuningUnlocked() const;
+
+    // -----------------------------------------------------------------------
+    // Tuning Setters  (each validates unlock state and clamps to definition spec)
+    // Returns false if the tuning is not yet unlocked or the value is invalid.
+    // -----------------------------------------------------------------------
+
+    UFUNCTION(BlueprintCallable, Category = "OwnedVehicle|Tuning")
+    bool SetCamberFront(float Value);
+
+    UFUNCTION(BlueprintCallable, Category = "OwnedVehicle|Tuning")
+    bool SetCamberRear(float Value);
+
+    UFUNCTION(BlueprintCallable, Category = "OwnedVehicle|Tuning")
+    bool SetToeFront(float Value);
+
+    UFUNCTION(BlueprintCallable, Category = "OwnedVehicle|Tuning")
+    bool SetToeRear(float Value);
+
+    UFUNCTION(BlueprintCallable, Category = "OwnedVehicle|Tuning")
+    bool SetRideHeightFront(float Value);
+
+    UFUNCTION(BlueprintCallable, Category = "OwnedVehicle|Tuning")
+    bool SetRideHeightRear(float Value);
+
+    UFUNCTION(BlueprintCallable, Category = "OwnedVehicle|Tuning")
+    bool SetOffsetFront(float Value);
+
+    UFUNCTION(BlueprintCallable, Category = "OwnedVehicle|Tuning")
+    bool SetOffsetRear(float Value);
+
+    UFUNCTION(BlueprintCallable, Category = "OwnedVehicle|Tuning")
+    bool SetTireWidthFront(float Value);
+
+    UFUNCTION(BlueprintCallable, Category = "OwnedVehicle|Tuning")
+    bool SetTireWidthRear(float Value);
+
+    UFUNCTION(BlueprintCallable, Category = "OwnedVehicle|Tuning")
+    bool SetABSEnabled(bool bEnabled);
+
+    UFUNCTION(BlueprintCallable, Category = "OwnedVehicle|Tuning")
+    bool SetBrakeBalance(float Value);
+
+    UFUNCTION(BlueprintCallable, Category = "OwnedVehicle|Tuning")
+    bool SetRearLSDType(ELSDType Type);
+
+    UFUNCTION(BlueprintCallable, Category = "OwnedVehicle|Tuning")
+    bool SetRearLSDInitialTorque(float Value);
+
+    UFUNCTION(BlueprintCallable, Category = "OwnedVehicle|Tuning")
+    bool SetRearLSDRatio(float Value);
+
+    UFUNCTION(BlueprintCallable, Category = "OwnedVehicle|Tuning")
+    bool SetFrontLSDType(ELSDType Type);
+
+    UFUNCTION(BlueprintCallable, Category = "OwnedVehicle|Tuning")
+    bool SetFrontLSDInitialTorque(float Value);
+
+    UFUNCTION(BlueprintCallable, Category = "OwnedVehicle|Tuning")
+    bool SetFrontLSDRatio(float Value);
+
+    UFUNCTION(BlueprintCallable, Category = "OwnedVehicle|Tuning")
+    bool SetSpringRateFront(float Value);
+
+    UFUNCTION(BlueprintCallable, Category = "OwnedVehicle|Tuning")
+    bool SetSpringRateRear(float Value);
+
+    UFUNCTION(BlueprintCallable, Category = "OwnedVehicle|Tuning")
+    bool SetDamperFront(float Value);
+
+    UFUNCTION(BlueprintCallable, Category = "OwnedVehicle|Tuning")
+    bool SetDamperRear(float Value);
+
+    UFUNCTION(BlueprintCallable, Category = "OwnedVehicle|Tuning")
+    bool SetDamperBalance(float Value);
+
+    UFUNCTION(BlueprintCallable, Category = "OwnedVehicle|Tuning")
+    bool SetStabilizerFront(float Value);
+
+    UFUNCTION(BlueprintCallable, Category = "OwnedVehicle|Tuning")
+    bool SetStabilizerRear(float Value);
+
+    /**
+     * Sets the front torque bias as a whole-number percentage (0–100).
+     * Rear torque = 100 - FrontBias.  Fails if vehicle is not AWD.
+     */
+    UFUNCTION(BlueprintCallable, Category = "OwnedVehicle|Tuning")
+    bool SetTorqueBalanceFrontBias(int32 FrontBias);
+
+    /** Resets all tuning fields to definition defaults. */
+    UFUNCTION(BlueprintCallable, Category = "OwnedVehicle")
+    void ResetTuningToDefaults();
 
     // -----------------------------------------------------------------------
     // Display helpers

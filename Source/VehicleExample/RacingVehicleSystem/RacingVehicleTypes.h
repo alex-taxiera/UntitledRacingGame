@@ -7,6 +7,32 @@
 #include "RacingVehicleTypes.generated.h"
 
 // ---------------------------------------------------------------------------
+// Drivetrain
+// ---------------------------------------------------------------------------
+
+/** Drivetrain layout of the vehicle. Controls which tuning sections are available. */
+UENUM(BlueprintType)
+enum class EDrivetrainType : uint8
+{
+    FWD     UMETA(DisplayName = "Front-Wheel Drive"),
+    RWD     UMETA(DisplayName = "Rear-Wheel Drive"),
+    AWD     UMETA(DisplayName = "All-Wheel Drive"),
+};
+
+// ---------------------------------------------------------------------------
+// LSD Type
+// ---------------------------------------------------------------------------
+
+/** Limited-Slip Differential engagement direction. */
+UENUM(BlueprintType)
+enum class ELSDType : uint8
+{
+    OneWay              UMETA(DisplayName = "1-Way"),
+    OnePointFiveWay     UMETA(DisplayName = "1.5-Way"),
+    TwoWay              UMETA(DisplayName = "2-Way"),
+};
+
+// ---------------------------------------------------------------------------
 // Part Slots
 // ---------------------------------------------------------------------------
 
@@ -118,6 +144,37 @@ struct FPartLevelData
      */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Transmission")
     int32 GearCount = 0;
+
+    // ----- Tuning unlock gates -----
+
+    /**
+     * Minimum installed Suspension level before alignment/suspension/stabilizer
+     * tuning options for this part level are shown to the player.
+     * Only relevant on Suspension part data; ignored on other slots.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TuningUnlock")
+    int32 SuspensionTuningUnlockLevel = 0;
+
+    /**
+     * Minimum installed Tire level before tire-width tuning is shown.
+     * Only relevant on Tire part data; ignored on other slots.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TuningUnlock")
+    int32 TireTuningUnlockLevel = 0;
+
+    /**
+     * Minimum installed Brake level before brake tuning (ABS, balance) is shown.
+     * Only relevant on Brake part data; ignored on other slots.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TuningUnlock")
+    int32 BrakeTuningUnlockLevel = 0;
+
+    /**
+     * Minimum installed LSD level before LSD tuning is shown.
+     * Only relevant on LSD part data; ignored on other slots.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TuningUnlock")
+    int32 LSDTuningUnlockLevel = 0;
 };
 
 // ---------------------------------------------------------------------------
@@ -257,4 +314,362 @@ struct FEffectiveVehicleStats
     /** Final per-gear ratios after player tuning */
     UPROPERTY(BlueprintReadOnly, Category = "Stats")
     TArray<float> GearRatios;
+};
+
+// ===========================================================================
+// Tuning Specs  (designer-defined ranges, live in VehicleDefinition)
+// ===========================================================================
+
+/**
+ * Generic float tuning parameter: default value and player-adjustable min/max.
+ * Used throughout the tuning definition structs below.
+ */
+USTRUCT(BlueprintType)
+struct FTuningSpec
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tuning")
+    float Default = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tuning")
+    float Min = -5.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tuning")
+    float Max = 5.0f;
+};
+
+// ---------------------------------------------------------------------------
+// Alignment Tuning Definition
+// ---------------------------------------------------------------------------
+
+/**
+ * Designer-configured ranges for all wheel alignment parameters.
+ * Stored on the VehicleDefinition.
+ *
+ * Unlock gates reference part levels:
+ *   - All settings except TireWidth require the installed Suspension part
+ *     to be >= MinSuspensionLevelForAlignment.
+ *   - TireWidth (front/rear) requires the installed Tire part
+ *     to be >= MinTireLevelForTireWidth.
+ */
+USTRUCT(BlueprintType)
+struct FAlignmentTuningDef
+{
+    GENERATED_BODY()
+
+    /** Minimum installed Suspension level to unlock all alignment tuning (camber, toe, ride height, offset). */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Unlock")
+    int32 MinSuspensionLevelForAlignment = 1;
+
+    /** Minimum installed Tire level to unlock tire-width tuning. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Unlock")
+    int32 MinTireLevelForTireWidth = 1;
+
+    // Camber  (-10 to +10)
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Camber")
+    FTuningSpec CamberFront = { 0.0f, -10.0f, 10.0f };
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Camber")
+    FTuningSpec CamberRear = { 0.0f, -10.0f, 10.0f };
+
+    // Toe  (-5 to +5)
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Toe")
+    FTuningSpec ToeFront = { 0.0f, -5.0f, 5.0f };
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Toe")
+    FTuningSpec ToeRear = { 0.0f, -5.0f, 5.0f };
+
+    // Ride Height  (-5 to +5)
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "RideHeight")
+    FTuningSpec RideHeightFront = { 0.0f, -5.0f, 5.0f };
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "RideHeight")
+    FTuningSpec RideHeightRear = { 0.0f, -5.0f, 5.0f };
+
+    // Offset  (0 to +10)
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Offset")
+    FTuningSpec OffsetFront = { 0.0f, 0.0f, 10.0f };
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Offset")
+    FTuningSpec OffsetRear = { 0.0f, 0.0f, 10.0f };
+
+    /**
+     * Tire Width offset.  The slider runs from 60 (narrowest) to 0 (widest).
+     * Default 0 = widest/stock.  Increasing the value narrows the tire.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TireWidth")
+    FTuningSpec TireWidthFront = { 0.0f, 0.0f, 60.0f };
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TireWidth")
+    FTuningSpec TireWidthRear = { 0.0f, 0.0f, 60.0f };
+};
+
+// ---------------------------------------------------------------------------
+// Brake Tuning Definition
+// ---------------------------------------------------------------------------
+
+/**
+ * Designer-configured brake tuning options.
+ * Requires Brake part >= MinBrakeLevelForTuning.
+ */
+USTRUCT(BlueprintType)
+struct FBrakeTuningDef
+{
+    GENERATED_BODY()
+
+    /** Minimum installed Brake level to unlock brake tuning. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Unlock")
+    int32 MinBrakeLevelForTuning = 1;
+
+    /** Whether ABS can be toggled at all on this vehicle. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ABS")
+    bool bABSAvailable = true;
+
+    /**
+     * Brake balance: negative = more rear bias, 0 = neutral.
+     * Range -10 to 0.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Balance")
+    FTuningSpec BrakeBalance = { 0.0f, -10.0f, 0.0f };
+};
+
+// ---------------------------------------------------------------------------
+// LSD Tuning Definition  (one per differential unit)
+// ---------------------------------------------------------------------------
+
+/**
+ * Designer-configured LSD tuning for one differential (front or rear).
+ * On AWD vehicles the VehicleDefinition carries both FrontLSD and RearLSD.
+ * On FWD/RWD only the applicable one is used.
+ */
+USTRUCT(BlueprintType)
+struct FLSDTuningDef
+{
+    GENERATED_BODY()
+
+    /** Minimum installed LSD level to unlock LSD tuning. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Unlock")
+    int32 MinLSDLevelForTuning = 1;
+
+    /** LSD types the player may select. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "LSDType")
+    ELSDType DefaultLSDType = ELSDType::OneWay;
+
+    /** Initial torque range (0–10). */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "LSD")
+    FTuningSpec InitialTorque = { 5.0f, 0.0f, 10.0f };
+
+    /** LSD ratio range (0–10). */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "LSD")
+    FTuningSpec LSDRatio = { 5.0f, 0.0f, 10.0f };
+};
+
+// ---------------------------------------------------------------------------
+// Suspension Tuning Definition
+// ---------------------------------------------------------------------------
+
+/**
+ * Designer-configured ranges for suspension settings.
+ * Requires Suspension part >= MinSuspensionLevelForTuning.
+ */
+USTRUCT(BlueprintType)
+struct FSuspensionTuningDef
+{
+    GENERATED_BODY()
+
+    /** Minimum installed Suspension level to unlock suspension tuning. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Unlock")
+    int32 MinSuspensionLevelForTuning = 1;
+
+    // Spring Rate  (-5 to +5)
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "SpringRate")
+    FTuningSpec SpringRateFront = { 0.0f, -5.0f, 5.0f };
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "SpringRate")
+    FTuningSpec SpringRateRear = { 0.0f, -5.0f, 5.0f };
+
+    // Damper  (-15 to +15)
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Damper")
+    FTuningSpec DamperFront = { 0.0f, -15.0f, 15.0f };
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Damper")
+    FTuningSpec DamperRear = { 0.0f, -15.0f, 15.0f };
+
+    // Damper Balance  (0 to 100)
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Damper")
+    FTuningSpec DamperBalance = { 50.0f, 0.0f, 100.0f };
+};
+
+// ---------------------------------------------------------------------------
+// Stabilizer Tuning Definition
+// ---------------------------------------------------------------------------
+
+/**
+ * Designer-configured stabilizer (anti-roll bar) ranges.
+ * Unlocked by the same Suspension part level gate as suspension tuning.
+ * Uses the same MinSuspensionLevelForTuning field from FSuspensionTuningDef —
+ * the designer sets one threshold that covers both suspension and stabilizer.
+ */
+USTRUCT(BlueprintType)
+struct FStabilizerTuningDef
+{
+    GENERATED_BODY()
+
+    // Front/Rear stabilizer stiffness offset  (-5 to +5)
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Stabilizer")
+    FTuningSpec StabilizerFront = { 0.0f, -5.0f, 5.0f };
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Stabilizer")
+    FTuningSpec StabilizerRear = { 0.0f, -5.0f, 5.0f };
+};
+
+// ---------------------------------------------------------------------------
+// Torque Balance Definition  (AWD only)
+// ---------------------------------------------------------------------------
+
+/**
+ * Front-to-rear torque split tuning for AWD vehicles.
+ * FrontBias is a whole-number percentage (0–100); rear is implicit (100 - Front).
+ * E.g. FrontBias = 50 means 50:50.  FrontBias = 30 means 30:70.
+ */
+USTRUCT(BlueprintType)
+struct FTorqueBalanceDef
+{
+    GENERATED_BODY()
+
+    /** Default front torque percentage (0–100). */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TorqueBalance",
+        meta = (ClampMin = "0", ClampMax = "100"))
+    int32 DefaultFrontBias = 50;
+
+    /** Minimum front torque percentage the player can set. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TorqueBalance",
+        meta = (ClampMin = "0", ClampMax = "100"))
+    int32 MinFrontBias = 0;
+
+    /** Maximum front torque percentage the player can set. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TorqueBalance",
+        meta = (ClampMin = "0", ClampMax = "100"))
+    int32 MaxFrontBias = 100;
+};
+
+// ===========================================================================
+// Tuning State  (player-set values, saved per owned vehicle instance)
+// ===========================================================================
+
+/** Player-set alignment values for one owned vehicle. */
+USTRUCT(BlueprintType)
+struct FAlignmentTuningState
+{
+    GENERATED_BODY()
+
+    UPROPERTY(SaveGame, BlueprintReadWrite, Category = "Alignment")
+    float CamberFront = 0.0f;
+
+    UPROPERTY(SaveGame, BlueprintReadWrite, Category = "Alignment")
+    float CamberRear = 0.0f;
+
+    UPROPERTY(SaveGame, BlueprintReadWrite, Category = "Alignment")
+    float ToeFront = 0.0f;
+
+    UPROPERTY(SaveGame, BlueprintReadWrite, Category = "Alignment")
+    float ToeRear = 0.0f;
+
+    UPROPERTY(SaveGame, BlueprintReadWrite, Category = "Alignment")
+    float RideHeightFront = 0.0f;
+
+    UPROPERTY(SaveGame, BlueprintReadWrite, Category = "Alignment")
+    float RideHeightRear = 0.0f;
+
+    UPROPERTY(SaveGame, BlueprintReadWrite, Category = "Alignment")
+    float OffsetFront = 0.0f;
+
+    UPROPERTY(SaveGame, BlueprintReadWrite, Category = "Alignment")
+    float OffsetRear = 0.0f;
+
+    UPROPERTY(SaveGame, BlueprintReadWrite, Category = "Alignment")
+    float TireWidthFront = 0.0f;
+
+    UPROPERTY(SaveGame, BlueprintReadWrite, Category = "Alignment")
+    float TireWidthRear = 0.0f;
+};
+
+/** Player-set brake tuning for one owned vehicle. */
+USTRUCT(BlueprintType)
+struct FBrakeTuningState
+{
+    GENERATED_BODY()
+
+    UPROPERTY(SaveGame, BlueprintReadWrite, Category = "Brakes")
+    bool bABSEnabled = false;
+
+    UPROPERTY(SaveGame, BlueprintReadWrite, Category = "Brakes")
+    float BrakeBalance = 0.0f;
+};
+
+/** Player-set LSD tuning for one differential unit. */
+USTRUCT(BlueprintType)
+struct FLSDTuningState
+{
+    GENERATED_BODY()
+
+    UPROPERTY(SaveGame, BlueprintReadWrite, Category = "LSD")
+    ELSDType LSDType = ELSDType::OneWay;
+
+    UPROPERTY(SaveGame, BlueprintReadWrite, Category = "LSD")
+    float InitialTorque = 5.0f;
+
+    UPROPERTY(SaveGame, BlueprintReadWrite, Category = "LSD")
+    float LSDRatio = 5.0f;
+};
+
+/** Player-set suspension tuning for one owned vehicle. */
+USTRUCT(BlueprintType)
+struct FSuspensionTuningState
+{
+    GENERATED_BODY()
+
+    UPROPERTY(SaveGame, BlueprintReadWrite, Category = "Suspension")
+    float SpringRateFront = 0.0f;
+
+    UPROPERTY(SaveGame, BlueprintReadWrite, Category = "Suspension")
+    float SpringRateRear = 0.0f;
+
+    UPROPERTY(SaveGame, BlueprintReadWrite, Category = "Suspension")
+    float DamperFront = 0.0f;
+
+    UPROPERTY(SaveGame, BlueprintReadWrite, Category = "Suspension")
+    float DamperRear = 0.0f;
+
+    UPROPERTY(SaveGame, BlueprintReadWrite, Category = "Suspension")
+    float DamperBalance = 50.0f;
+};
+
+/** Player-set stabilizer tuning for one owned vehicle. */
+USTRUCT(BlueprintType)
+struct FStabilizerTuningState
+{
+    GENERATED_BODY()
+
+    UPROPERTY(SaveGame, BlueprintReadWrite, Category = "Stabilizer")
+    float StabilizerFront = 0.0f;
+
+    UPROPERTY(SaveGame, BlueprintReadWrite, Category = "Stabilizer")
+    float StabilizerRear = 0.0f;
+};
+
+/**
+ * Player-set torque balance for one AWD owned vehicle.
+ * FrontBias is a whole-number percentage (0–100); rear is (100 - FrontBias).
+ */
+USTRUCT(BlueprintType)
+struct FTorqueBalanceState
+{
+    GENERATED_BODY()
+
+    /** Front torque percentage.  Rear is implicitly (100 - FrontBias). */
+    UPROPERTY(SaveGame, BlueprintReadWrite, Category = "TorqueBalance",
+        meta = (ClampMin = "0", ClampMax = "100"))
+    int32 FrontBias = 50;
 };
