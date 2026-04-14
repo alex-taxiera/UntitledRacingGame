@@ -9,6 +9,7 @@
 #include "PerkData.h"
 #include "CharacterPerkState.h"
 #include "NPCVehicleConfig.h"
+#include "RacingAITypes.h"
 #include "NPCRacerData.generated.h"
 
 class UOwnedVehicle;
@@ -110,6 +111,19 @@ public:
      */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vehicle")
     FNPCVehicleConfig VehicleConfig;
+
+    // -----------------------------------------------------------------------
+    // AI Configuration
+    // -----------------------------------------------------------------------
+
+    /**
+     * Full AI behaviour configuration for this NPC racer.
+     * Controls state machine behaviour, behavior rules, nitro usage,
+     * cornering parameters, rubber-band, and per-NPC difficulty scaling.
+     * The AI controller reads this at possession time.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI")
+    FRacingAIConfig AIConfig;
 
     // -----------------------------------------------------------------------
     // Runtime helpers

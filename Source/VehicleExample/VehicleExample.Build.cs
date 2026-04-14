@@ -17,7 +17,8 @@ public class VehicleExample : ModuleRules
 			"ChaosVehicles",
 			"PhysicsCore",
 			"UMG",
-			"Slate"
+			"Slate",
+			"AIModule"
 		});
 
 		PublicIncludePaths.AddRange(new string[] {
@@ -28,7 +29,8 @@ public class VehicleExample : ModuleRules
 			"VehicleExample/Variant_TimeTrial",
 			"VehicleExample/Variant_TimeTrial/UI",
 			"VehicleExample/RacingVehicleSystem",
-			"VehicleExample/RacingCharacterSystem"
+			"VehicleExample/RacingCharacterSystem",
+			"VehicleExample/RacingAISystem"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });
