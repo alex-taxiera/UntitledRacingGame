@@ -13,6 +13,7 @@ class UTextureRenderTarget2D;
 DECLARE_DELEGATE_OneParam(FOnDealershipVehiclePurchased, UVehicleDefinition*);
 DECLARE_DELEGATE_OneParam(FOnDealershipPreviewRequested, UVehicleDefinition*);
 DECLARE_DELEGATE(FOnDealershipMenuRequested);
+DECLARE_DELEGATE(FOnDealershipSystemMenuRequested);
 
 /**
  * SDealershipPanel
@@ -46,9 +47,10 @@ public:
     {}
         SLATE_ARGUMENT(URacingGameInstance*,       GameInstance)
         SLATE_ARGUMENT(UTextureRenderTarget2D*,    RenderTarget)
-        SLATE_EVENT(FOnDealershipVehiclePurchased, OnVehiclePurchased)
-        SLATE_EVENT(FOnDealershipPreviewRequested,  OnPreviewRequested)
-        SLATE_EVENT(FOnDealershipMenuRequested,     OnMenuRequested)
+        SLATE_EVENT(FOnDealershipVehiclePurchased,  OnVehiclePurchased)
+        SLATE_EVENT(FOnDealershipPreviewRequested,   OnPreviewRequested)
+        SLATE_EVENT(FOnDealershipMenuRequested,      OnMenuRequested)
+        SLATE_EVENT(FOnDealershipSystemMenuRequested, OnSystemMenuRequested)
     SLATE_END_ARGS()
 
     void Construct(const FArguments& InArgs);
@@ -57,9 +59,10 @@ private:
 
     TWeakObjectPtr<URacingGameInstance>    GameInstance;
     TWeakObjectPtr<UTextureRenderTarget2D> RenderTarget;
-    FOnDealershipVehiclePurchased          OnVehiclePurchased;
-    FOnDealershipPreviewRequested          OnPreviewRequested;
-    FOnDealershipMenuRequested             OnMenuRequested;
+    FOnDealershipVehiclePurchased           OnVehiclePurchased;
+    FOnDealershipPreviewRequested           OnPreviewRequested;
+    FOnDealershipMenuRequested              OnMenuRequested;
+    FOnDealershipSystemMenuRequested        OnSystemMenuRequested;
 
     /** Currently highlighted definition in the list. */
     TWeakObjectPtr<UVehicleDefinition> SelectedDefinition;

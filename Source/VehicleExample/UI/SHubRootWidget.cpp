@@ -4,6 +4,7 @@
 #include "SDealershipPanel.h"
 #include "SGaragePanel.h"
 #include "SHubMenuOverlay.h"
+#include "SHubSystemOverlay.h"
 #include "HubVehicleDisplayActor.h"
 #include "RacingGameInstance.h"
 #include "RacingVehicleSystem/VehicleInventory.h"
@@ -44,14 +45,16 @@ void SHubRootWidget::Construct(const FArguments& InArgs)
         .RenderTarget(RT)
         .OnVehiclePurchased(this, &SHubRootWidget::OnVehiclePurchased)
         .OnPreviewRequested(this, &SHubRootWidget::OnPreviewRequested)
-        .OnMenuRequested(this, &SHubRootWidget::OpenMenu);
+        .OnMenuRequested(this, &SHubRootWidget::OpenMenu)
+        .OnSystemMenuRequested(this, &SHubRootWidget::OpenSystemMenu);
 
     TSharedRef<SGaragePanel> Garage =
         SNew(SGaragePanel)
         .GameInstance(GI)
         .RenderTarget(RT)
         .OnEnterRaceRequested(this, &SHubRootWidget::OnEnterRaceRequested)
-        .OnMenuRequested(this, &SHubRootWidget::OpenMenu);
+        .OnMenuRequested(this, &SHubRootWidget::OpenMenu)
+        .OnSystemMenuRequested(this, &SHubRootWidget::OpenSystemMenu);
 
     TSharedRef<SHubMenuOverlay> MenuOverlay =
         SNew(SHubMenuOverlay)
@@ -59,9 +62,15 @@ void SHubRootWidget::Construct(const FArguments& InArgs)
         .OnPanelSelected(this, &SHubRootWidget::OnMenuPanelSelected)
         .OnClosed(this, &SHubRootWidget::CloseMenu);
 
-    DealershipSlot  = Dealership;
-    GarageSlot      = Garage;
-    MenuOverlaySlot = MenuOverlay;
+    TSharedRef<SHubSystemOverlay> SystemOverlay =
+        SNew(SHubSystemOverlay)
+        .GameInstance(GI)
+        .OnClosed(this, &SHubRootWidget::CloseSystemMenu);
+
+    DealershipSlot   = Dealership;
+    GarageSlot       = Garage;
+    MenuOverlaySlot  = MenuOverlay;
+    SystemOverlaySlot = SystemOverlay;
 
     ChildSlot
     [
@@ -79,10 +88,16 @@ void SHubRootWidget::Construct(const FArguments& InArgs)
             Garage
         ]
 
-        // Menu overlay (always in the tree, visibility-toggled)
+        // Menu overlay
         + SOverlay::Slot()
         [
             MenuOverlay
+        ]
+
+        // System overlay (always in the tree, visibility-toggled)
+        + SOverlay::Slot()
+        [
+            SystemOverlay
         ]
     ];
 
@@ -127,6 +142,18 @@ void SHubRootWidget::OpenMenu()
 void SHubRootWidget::CloseMenu()
 {
     bMenuVisible = false;
+    ApplyPanelVisibility();
+}
+
+void SHubRootWidget::OpenSystemMenu()
+{
+    bSystemMenuVisible = true;
+    ApplyPanelVisibility();
+}
+
+void SHubRootWidget::CloseSystemMenu()
+{
+    bSystemMenuVisible = false;
     ApplyPanelVisibility();
 }
 
@@ -191,6 +218,14 @@ void SHubRootWidget::ApplyPanelVisibility()
     {
         MenuOverlaySlot->SetVisibility(
             bMenuVisible
+            ? EVisibility::Visible
+            : EVisibility::Collapsed);
+    }
+
+    if (SystemOverlaySlot.IsValid())
+    {
+        SystemOverlaySlot->SetVisibility(
+            bSystemMenuVisible
             ? EVisibility::Visible
             : EVisibility::Collapsed);
     }

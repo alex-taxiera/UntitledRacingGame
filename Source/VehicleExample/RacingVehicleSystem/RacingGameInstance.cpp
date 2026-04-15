@@ -4,8 +4,11 @@
 #include "Kismet/GameplayStatics.h"
 #include "PlayerPerkManager.h"
 #include "RacingSaveGame.h"
+#include "OwnedVehicle.h"
+#include "VehicleDefinition.h"
 
-const FName URacingGameInstance::GameLevelName = TEXT("HubLevel");
+const FName URacingGameInstance::GameLevelName  = TEXT("Hub");
+const FName URacingGameInstance::TitleLevelName = TEXT("TitleScreen");
 const int32 URacingGameInstance::StartingCurrency = 10000000;
 
 URacingGameInstance::URacingGameInstance()
@@ -56,6 +59,7 @@ void URacingGameInstance::SaveGame()
     Save->OwnedVehicleIDs.Empty();
     Save->VehicleDefinitionIDs.Empty();
     Save->VehicleNicknames.Empty();
+    Save->VehiclePartLevels.Empty();
 
     for (UOwnedVehicle* Vehicle : VehicleInventory->OwnedVehicles)
     {
@@ -64,6 +68,10 @@ void URacingGameInstance::SaveGame()
         Save->OwnedVehicleIDs.Add(Vehicle->InstanceID);
         Save->VehicleDefinitionIDs.Add(Vehicle->InstanceID, Vehicle->Definition->VehicleID);
         Save->VehicleNicknames.Add(Vehicle->InstanceID, Vehicle->Nickname);
+
+        FSavedVehiclePartLevels PartData;
+        PartData.Levels = Vehicle->InstalledPartLevels;
+        Save->VehiclePartLevels.Add(Vehicle->InstanceID, PartData);
     }
 
     // --- Perk manager ---
@@ -94,9 +102,49 @@ void URacingGameInstance::LoadGame()
     if (!Save) { return; }
 
     // --- Economy ---
-    VehicleInventory->PlayerCurrency  = Save->PlayerCurrency;
-    VehicleInventory->PlayerPoints    = Save->PlayerPoints;
+    VehicleInventory->PlayerCurrency   = Save->PlayerCurrency;
+    VehicleInventory->PlayerPoints     = Save->PlayerPoints;
     VehicleInventory->CurrentVehicleID = Save->CurrentVehicleID;
+
+    // --- Vehicle inventory ---
+    VehicleInventory->OwnedVehicles.Empty();
+
+    // Build a lookup from VehicleID FName -> UVehicleDefinition* using AllVehicles
+    TMap<FName, UVehicleDefinition*> DefinitionsByID;
+    for (UVehicleDefinition* Def : AllVehicles)
+    {
+        if (Def) { DefinitionsByID.Add(Def->VehicleID, Def); }
+    }
+
+    for (const FGuid& InstanceID : Save->OwnedVehicleIDs)
+    {
+        const FName* DefID = Save->VehicleDefinitionIDs.Find(InstanceID);
+        if (!DefID) { continue; }
+
+        UVehicleDefinition** DefPtr = DefinitionsByID.Find(*DefID);
+        if (!DefPtr || !*DefPtr) { continue; }
+
+        // Reconstruct the OwnedVehicle from its definition
+        UOwnedVehicle* Vehicle = UOwnedVehicle::CreateFromDefinition(VehicleInventory, *DefPtr);
+        Vehicle->InstanceID = InstanceID; // restore the original GUID
+
+        // Restore nickname
+        if (const FString* Nick = Save->VehicleNicknames.Find(InstanceID))
+        {
+            Vehicle->Nickname = *Nick;
+        }
+
+        // Restore installed part levels
+        if (const FSavedVehiclePartLevels* Parts = Save->VehiclePartLevels.Find(InstanceID))
+        {
+            Vehicle->InstalledPartLevels = Parts->Levels;
+        }
+
+        VehicleInventory->OwnedVehicles.Add(Vehicle);
+    }
+
+    UE_LOG(LogTemp, Log, TEXT("URacingGameInstance::LoadGame ï¿½ loaded %d vehicle(s)"),
+        VehicleInventory->OwnedVehicles.Num());
 
     // --- Perk manager ---
     if (PerkManager && PerkManager->PerkState)
@@ -112,12 +160,6 @@ void URacingGameInstance::LoadGame()
             PerkManager->AchievedStoryFlags.Add(Flag);
         }
     }
-
-    // Note: OwnedVehicle reconstruction requires the full vehicle definition
-    // catalogue to be loaded. Wire this up in a future pass once VehicleDefinition
-    // assets are referenced from the GameInstance Blueprint defaults and
-    // AllVehicles is populated before LoadGame() is called.
-    UE_LOG(LogTemp, Log, TEXT("URacingGameInstance::LoadGame — save loaded (vehicle reconstruction pending)"));
 }
 
 void URacingGameInstance::DeleteSave()
@@ -161,5 +203,27 @@ void URacingGameInstance::ContinueGame()
 {
     LoadGame();
     UGameplayStatics::OpenLevel(this, GameLevelName);
+}
+
+void URacingGameInstance::ReturnToTitle()
+{
+    if (VehicleInventory)
+    {
+        VehicleInventory->OwnedVehicles.Empty();
+        VehicleInventory->PlayerCurrency   = 0;
+        VehicleInventory->PlayerPoints     = 0;
+        VehicleInventory->CurrentVehicleID = FGuid();
+    }
+    if (PerkManager)
+    {
+        PerkManager->SkillPointBank = 0;
+        PerkManager->AchievedStoryFlags.Empty();
+        if (PerkManager->PerkState)
+        {
+            PerkManager->PerkState->UnlockedPerkIDs.Empty();
+            PerkManager->PerkState->EquippedSkillPerkIDs.Empty();
+        }
+    }
+    UGameplayStatics::OpenLevel(this, TitleLevelName);
 }
 

@@ -133,10 +133,21 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Racing")
     void ContinueGame();
 
+    /**
+     * Resets in-memory state and returns to the title screen level.
+     * Does NOT delete the save file — progress is preserved.
+     * Called by the hub System menu "Return to Title" button.
+     */
+    UFUNCTION(BlueprintCallable, Category = "Racing")
+    void ReturnToTitle();
+
 private:
 
     /** The level to open when starting or continuing a game. */
     static const FName GameLevelName;
+
+    /** The title screen level name. */
+    static const FName TitleLevelName;
 
     /** Currency granted to the player at the start of a new game. */
     static const int32 StartingCurrency;

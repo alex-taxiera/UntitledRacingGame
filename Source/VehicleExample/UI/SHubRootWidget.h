@@ -57,8 +57,9 @@ private:
     TWeakObjectPtr<URacingGameInstance>  GameInstance;
     AHubVehicleDisplayActor*             DisplayActor = nullptr;
 
-    EHubPanel ActivePanel = EHubPanel::Dealership;
-    bool bMenuVisible     = false;
+    EHubPanel ActivePanel     = EHubPanel::Dealership;
+    bool bMenuVisible          = false;
+    bool bSystemMenuVisible    = false;
 
     /** True while the player has no vehicles (forces dealership). */
     bool bDealershipLocked = false;
@@ -70,6 +71,7 @@ private:
     TSharedPtr<SWidget> DealershipSlot;
     TSharedPtr<SWidget> GarageSlot;
     TSharedPtr<SWidget> MenuOverlaySlot;
+    TSharedPtr<SWidget> SystemOverlaySlot;
 
     // -----------------------------------------------------------------------
     // Internal helpers
@@ -78,6 +80,9 @@ private:
     void OpenMenu();
     void CloseMenu();
     void OnMenuPanelSelected(EHubPanel Panel);
+
+    void OpenSystemMenu();
+    void CloseSystemMenu();
 
     /** Called by SDealershipPanel when a vehicle is purchased. */
     void OnVehiclePurchased(UVehicleDefinition* Definition);

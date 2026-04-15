@@ -12,6 +12,7 @@ class UPerkData;
 
 DECLARE_DELEGATE(FOnEnterRaceRequested);
 DECLARE_DELEGATE(FOnMenuRequested);
+DECLARE_DELEGATE(FOnSystemMenuRequested);
 
 /**
  * SGaragePanel
@@ -42,7 +43,8 @@ public:
         SLATE_ARGUMENT(URacingGameInstance*,    GameInstance)
         SLATE_ARGUMENT(UTextureRenderTarget2D*, RenderTarget)
         SLATE_EVENT(FOnEnterRaceRequested, OnEnterRaceRequested)
-        SLATE_EVENT(FOnMenuRequested,      OnMenuRequested)
+        SLATE_EVENT(FOnMenuRequested,       OnMenuRequested)
+        SLATE_EVENT(FOnSystemMenuRequested, OnSystemMenuRequested)
     SLATE_END_ARGS()
 
     void Construct(const FArguments& InArgs);
@@ -53,6 +55,7 @@ private:
     TWeakObjectPtr<UTextureRenderTarget2D> RenderTarget;
     FOnEnterRaceRequested OnEnterRaceRequested;
     FOnMenuRequested      OnMenuRequested;
+    FOnSystemMenuRequested OnSystemMenuRequested;
 
     FSlateBrush PreviewBrush;
     void RefreshPreviewBrush();

@@ -4,7 +4,25 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/SaveGame.h"
+#include "RacingVehicleTypes.h"
 #include "RacingSaveGame.generated.h"
+
+/**
+ * FSavedVehiclePartLevels
+ *
+ * Stores the installed part levels for one owned vehicle instance.
+ * Embedded in URacingSaveGame as a TMap value so each vehicle's parts
+ * are serialised independently without string encoding.
+ */
+USTRUCT()
+struct FSavedVehiclePartLevels
+{
+    GENERATED_BODY()
+
+    /** Maps each part slot to the installed level index (0 = stock). */
+    UPROPERTY(SaveGame)
+    TMap<EPartSlot, int32> Levels;
+};
 
 /**
  * URacingSaveGame
@@ -67,9 +85,9 @@ public:
     UPROPERTY(SaveGame)
     TMap<FGuid, FString> VehicleNicknames;
 
-    /** Per-vehicle: installed part levels (EPartSlot int32 ? level index). */
+    /** Per-vehicle: installed part levels. */
     UPROPERTY(SaveGame)
-    TMap<FGuid, FString> VehicleInstalledPartsJSON;
+    TMap<FGuid, FSavedVehiclePartLevels> VehiclePartLevels;
 
     /** The InstanceID of the currently selected vehicle. */
     UPROPERTY(SaveGame)

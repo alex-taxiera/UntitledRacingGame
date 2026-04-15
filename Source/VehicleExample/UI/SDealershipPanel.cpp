@@ -30,11 +30,12 @@ namespace DealershipLayout
 
 void SDealershipPanel::Construct(const FArguments& InArgs)
 {
-    GameInstance       = InArgs._GameInstance;
-    RenderTarget       = InArgs._RenderTarget;
-    OnVehiclePurchased = InArgs._OnVehiclePurchased;
-    OnPreviewRequested = InArgs._OnPreviewRequested;
-    OnMenuRequested    = InArgs._OnMenuRequested;
+    GameInstance          = InArgs._GameInstance;
+    RenderTarget          = InArgs._RenderTarget;
+    OnVehiclePurchased    = InArgs._OnVehiclePurchased;
+    OnPreviewRequested    = InArgs._OnPreviewRequested;
+    OnMenuRequested       = InArgs._OnMenuRequested;
+    OnSystemMenuRequested = InArgs._OnSystemMenuRequested;
 
     RefreshPreviewBrush();
 
@@ -110,6 +111,33 @@ void SDealershipPanel::Construct(const FArguments& InArgs)
                                 .Font(FCoreStyle::GetDefaultFontStyle("Bold",
                                     (int32)DealershipLayout::FontSize))
                                 .ColorAndOpacity(FLinearColor::White)
+                            ]
+                        ]
+                    ]
+
+                    + SHorizontalBox::Slot()
+                    .AutoWidth()
+                    .Padding(FMargin(8.f, 0.f, 0.f, 0.f))
+                    [
+                        SNew(SBox)
+                        .WidthOverride(140.f)
+                        .HeightOverride(48.f)
+                        [
+                            SNew(SButton)
+                            .OnClicked_Lambda([this]() -> FReply
+                            {
+                                OnSystemMenuRequested.ExecuteIfBound();
+                                return FReply::Handled();
+                            })
+                            .HAlign(HAlign_Center)
+                            .VAlign(VAlign_Center)
+                            .ButtonStyle(&FCoreStyle::Get().GetWidgetStyle<FButtonStyle>("Button"))
+                            [
+                                SNew(STextBlock)
+                                .Text(NSLOCTEXT("Dealership", "System", "SYSTEM"))
+                                .Font(FCoreStyle::GetDefaultFontStyle("Bold",
+                                    (int32)DealershipLayout::FontSize))
+                                .ColorAndOpacity(FLinearColor(0.7f, 0.7f, 0.7f))
                             ]
                         ]
                     ]
