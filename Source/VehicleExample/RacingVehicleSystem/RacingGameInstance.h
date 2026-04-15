@@ -118,9 +118,9 @@ public:
 
 private:
 
-    /**
-     * The level to open when starting or continuing a game.
-     * Change this name to match your actual gameplay level.
-     */
+    /** The level to open when starting or continuing a game. */
     static const FName GameLevelName;
+
+    /** Currency granted to the player at the start of a new game. */
+    static const int32 StartingCurrency;
 };

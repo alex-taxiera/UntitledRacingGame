@@ -6,6 +6,7 @@
 #include "RacingSaveGame.h"
 
 const FName URacingGameInstance::GameLevelName = TEXT("GameLevel");
+const int32 URacingGameInstance::StartingCurrency = 10000000;
 
 URacingGameInstance::URacingGameInstance()
 {
@@ -47,6 +48,7 @@ void URacingGameInstance::SaveGame()
     // --- Economy ---
     Save->PlayerCurrency = VehicleInventory->PlayerCurrency;
     Save->PlayerPoints   = VehicleInventory->PlayerPoints;
+    Save->CurrentVehicleID = VehicleInventory->CurrentVehicleID;
 
     // --- Vehicle inventory ---
     Save->OwnedVehicleIDs.Empty();
@@ -90,8 +92,9 @@ void URacingGameInstance::LoadGame()
     if (!Save) { return; }
 
     // --- Economy ---
-    VehicleInventory->PlayerCurrency = Save->PlayerCurrency;
-    VehicleInventory->PlayerPoints   = Save->PlayerPoints;
+    VehicleInventory->PlayerCurrency  = Save->PlayerCurrency;
+    VehicleInventory->PlayerPoints    = Save->PlayerPoints;
+    VehicleInventory->CurrentVehicleID = Save->CurrentVehicleID;
 
     // --- Perk manager ---
     if (PerkManager && PerkManager->PerkState)
@@ -123,6 +126,7 @@ void URacingGameInstance::DeleteSave()
     VehicleInventory->PlayerCurrency = 0;
     VehicleInventory->PlayerPoints   = 0;
     VehicleInventory->OwnedVehicles.Empty();
+    VehicleInventory->CurrentVehicleID = FGuid();
 
     if (PerkManager)
     {
@@ -143,6 +147,11 @@ void URacingGameInstance::DeleteSave()
 
 void URacingGameInstance::StartNewGame()
 {
+    if (VehicleInventory)
+    {
+        VehicleInventory->PlayerCurrency = StartingCurrency;
+        VehicleInventory->CurrentVehicleID = FGuid();
+    }
     UGameplayStatics::OpenLevel(this, GameLevelName);
 }
 

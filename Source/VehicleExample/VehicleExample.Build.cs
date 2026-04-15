@@ -35,7 +35,9 @@ public class VehicleExample : ModuleRules
 		PrivateDependencyModuleNames.AddRange(new string[] {
 			"Slate",
 			"SlateCore",
-			"UMG"
+			"UMG",
+			"RenderCore",
+			"Renderer"
 		});
 
 		// Uncomment if you are using online features

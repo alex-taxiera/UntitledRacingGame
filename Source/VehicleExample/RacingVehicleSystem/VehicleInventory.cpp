@@ -104,3 +104,14 @@ bool UVehicleInventory::OwnsVehicleModel(UVehicleDefinition* Definition) const
     }
     return false;
 }
+
+void UVehicleInventory::SetCurrentVehicle(UOwnedVehicle* Vehicle)
+{
+    CurrentVehicleID = Vehicle ? Vehicle->InstanceID : FGuid();
+}
+
+UOwnedVehicle* UVehicleInventory::GetCurrentVehicle() const
+{
+    if (!CurrentVehicleID.IsValid()) { return nullptr; }
+    return FindOwnedVehicleByID(CurrentVehicleID);
+}

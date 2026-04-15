@@ -61,6 +61,14 @@ public:
     UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Garage")
     TArray<TObjectPtr<UOwnedVehicle>> OwnedVehicles;
 
+    /**
+     * The InstanceID of the vehicle the player currently has selected.
+     * This is the car shown in the garage and used in races.
+     * Invalid GUID = no vehicle selected (new game state).
+     */
+    UPROPERTY(SaveGame, BlueprintReadOnly, Category = "Garage")
+    FGuid CurrentVehicleID;
+
     // -----------------------------------------------------------------------
     // Events
     // -----------------------------------------------------------------------
@@ -164,4 +172,22 @@ public:
     /** Returns true if the player owns at least one instance of the given definition. */
     UFUNCTION(BlueprintCallable, Category = "VehicleInventory")
     bool OwnsVehicleModel(UVehicleDefinition* Definition) const;
+
+    /**
+     * Sets the current vehicle to the given owned instance.
+     * Pass nullptr to clear the selection.
+     */
+    UFUNCTION(BlueprintCallable, Category = "VehicleInventory")
+    void SetCurrentVehicle(UOwnedVehicle* Vehicle);
+
+    /**
+     * Returns the currently selected vehicle, or nullptr if none is set
+     * or the saved GUID no longer matches any owned vehicle.
+     */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "VehicleInventory")
+    UOwnedVehicle* GetCurrentVehicle() const;
+
+    /** Returns true if the player has at least one owned vehicle. */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "VehicleInventory")
+    bool HasAnyVehicle() const { return OwnedVehicles.Num() > 0; }
 };

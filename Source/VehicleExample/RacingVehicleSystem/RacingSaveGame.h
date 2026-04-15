@@ -71,6 +71,10 @@ public:
     UPROPERTY(SaveGame)
     TMap<FGuid, FString> VehicleInstalledPartsJSON;
 
+    /** The InstanceID of the currently selected vehicle. */
+    UPROPERTY(SaveGame)
+    FGuid CurrentVehicleID;
+
     // -----------------------------------------------------------------------
     // Perk manager
     // -----------------------------------------------------------------------
