@@ -43,7 +43,8 @@ void SHubRootWidget::Construct(const FArguments& InArgs)
         .GameInstance(GI)
         .RenderTarget(RT)
         .OnVehiclePurchased(this, &SHubRootWidget::OnVehiclePurchased)
-        .OnPreviewRequested(this, &SHubRootWidget::OnPreviewRequested);
+        .OnPreviewRequested(this, &SHubRootWidget::OnPreviewRequested)
+        .OnMenuRequested(this, &SHubRootWidget::OpenMenu);
 
     TSharedRef<SGaragePanel> Garage =
         SNew(SGaragePanel)
@@ -137,7 +138,15 @@ void SHubRootWidget::OnMenuPanelSelected(EHubPanel Panel)
 
 void SHubRootWidget::OnVehiclePurchased(UVehicleDefinition* /*Definition*/)
 {
-    // First purchase — lift the lock and move to garage
+    URacingGameInstance* GI = GameInstance.Get();
+
+    // Save immediately after purchase so progress is never lost
+    if (GI)
+    {
+        GI->SaveGame();
+    }
+
+    // First purchase — lift the dealership lock and move to garage
     bDealershipLocked = false;
     ShowPanel(EHubPanel::Garage);
 }

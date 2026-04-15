@@ -5,7 +5,7 @@
 #include "PlayerPerkManager.h"
 #include "RacingSaveGame.h"
 
-const FName URacingGameInstance::GameLevelName = TEXT("GameLevel");
+const FName URacingGameInstance::GameLevelName = TEXT("HubLevel");
 const int32 URacingGameInstance::StartingCurrency = 10000000;
 
 URacingGameInstance::URacingGameInstance()
@@ -17,8 +17,10 @@ void URacingGameInstance::Init()
     Super::Init();
 
     VehicleInventory = NewObject<UVehicleInventory>(this, TEXT("VehicleInventory"));
+    VehicleInventory->AllVehicles = AllVehicles;
 
     PerkManager = NewObject<UPlayerPerkManager>(this, TEXT("PerkManager"));
+    PerkManager->AllPerks = AllPerks;
     PerkManager->Initialise();
 }
 

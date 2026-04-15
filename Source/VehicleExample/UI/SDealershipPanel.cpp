@@ -34,6 +34,7 @@ void SDealershipPanel::Construct(const FArguments& InArgs)
     RenderTarget       = InArgs._RenderTarget;
     OnVehiclePurchased = InArgs._OnVehiclePurchased;
     OnPreviewRequested = InArgs._OnPreviewRequested;
+    OnMenuRequested    = InArgs._OnMenuRequested;
 
     RefreshPreviewBrush();
 
@@ -43,30 +44,76 @@ void SDealershipPanel::Construct(const FArguments& InArgs)
         .BorderImage(FCoreStyle::Get().GetBrush("BlackBrush"))
         .BorderBackgroundColor(FLinearColor(0.05f, 0.05f, 0.05f))
         [
-            SNew(SHorizontalBox)
+            SNew(SVerticalBox)
 
-            // ?? Left: vehicle list ?????????????????????????????????????
-            + SHorizontalBox::Slot()
-            .AutoWidth()
+            // ?? Main content row ???????????????????????????????????????
+            + SVerticalBox::Slot()
+            .FillHeight(1.f)
             [
-                SNew(SBox)
-                .WidthOverride(DealershipLayout::CardWidth + 24.f)
+                SNew(SHorizontalBox)
+
+                // ?? Left: vehicle list ?????????????????????????????????????
+                + SHorizontalBox::Slot()
+                .AutoWidth()
                 [
-                    SNew(SBorder)
-                    .BorderImage(FCoreStyle::Get().GetBrush("Border"))
-                    .BorderBackgroundColor(FLinearColor(0.08f, 0.08f, 0.08f))
-                    .Padding(FMargin(12.f))
+                    SNew(SBox)
+                    .WidthOverride(DealershipLayout::CardWidth + 24.f)
                     [
-                        MakeVehicleList()
+                        SNew(SBorder)
+                        .BorderImage(FCoreStyle::Get().GetBrush("Border"))
+                        .BorderBackgroundColor(FLinearColor(0.08f, 0.08f, 0.08f))
+                        .Padding(FMargin(12.f))
+                        [
+                            MakeVehicleList()
+                        ]
                     ]
+                ]
+
+                // ?? Right: preview + details ???????????????????????????????
+                + SHorizontalBox::Slot()
+                .FillWidth(1.f)
+                [
+                    MakePreviewPanel()
                 ]
             ]
 
-            // ?? Right: preview + details ???????????????????????????????
-            + SHorizontalBox::Slot()
-            .FillWidth(1.f)
+            // ?? Bottom bar ?????????????????????????????????????????????
+            + SVerticalBox::Slot()
+            .AutoHeight()
             [
-                MakePreviewPanel()
+                SNew(SBorder)
+                .BorderImage(FCoreStyle::Get().GetBrush("Border"))
+                .BorderBackgroundColor(FLinearColor(0.06f, 0.06f, 0.06f))
+                .Padding(FMargin(24.f, 12.f))
+                [
+                    SNew(SHorizontalBox)
+
+                    + SHorizontalBox::Slot()
+                    .AutoWidth()
+                    [
+                        SNew(SBox)
+                        .WidthOverride(140.f)
+                        .HeightOverride(48.f)
+                        [
+                            SNew(SButton)
+                            .OnClicked_Lambda([this]() -> FReply
+                            {
+                                OnMenuRequested.ExecuteIfBound();
+                                return FReply::Handled();
+                            })
+                            .HAlign(HAlign_Center)
+                            .VAlign(VAlign_Center)
+                            .ButtonStyle(&FCoreStyle::Get().GetWidgetStyle<FButtonStyle>("Button"))
+                            [
+                                SNew(STextBlock)
+                                .Text(NSLOCTEXT("Dealership", "Menu", "MENU"))
+                                .Font(FCoreStyle::GetDefaultFontStyle("Bold",
+                                    (int32)DealershipLayout::FontSize))
+                                .ColorAndOpacity(FLinearColor::White)
+                            ]
+                        ]
+                    ]
+                ]
             ]
         ]
     ];

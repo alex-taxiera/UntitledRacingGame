@@ -11,7 +11,7 @@ void USportsCarNPCRacerData::PostInitProperties()
 {
     Super::PostInitProperties();
 
-    if (!HasAnyFlags(RF_ClassDefaultObject)) { return; }
+    if (HasAnyFlags(RF_ClassDefaultObject)) { return; }
 
     // -----------------------------------------------------------------------
     // Identity

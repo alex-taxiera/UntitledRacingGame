@@ -12,6 +12,7 @@ class UTextureRenderTarget2D;
 
 DECLARE_DELEGATE_OneParam(FOnDealershipVehiclePurchased, UVehicleDefinition*);
 DECLARE_DELEGATE_OneParam(FOnDealershipPreviewRequested, UVehicleDefinition*);
+DECLARE_DELEGATE(FOnDealershipMenuRequested);
 
 /**
  * SDealershipPanel
@@ -47,6 +48,7 @@ public:
         SLATE_ARGUMENT(UTextureRenderTarget2D*,    RenderTarget)
         SLATE_EVENT(FOnDealershipVehiclePurchased, OnVehiclePurchased)
         SLATE_EVENT(FOnDealershipPreviewRequested,  OnPreviewRequested)
+        SLATE_EVENT(FOnDealershipMenuRequested,     OnMenuRequested)
     SLATE_END_ARGS()
 
     void Construct(const FArguments& InArgs);
@@ -57,6 +59,7 @@ private:
     TWeakObjectPtr<UTextureRenderTarget2D> RenderTarget;
     FOnDealershipVehiclePurchased          OnVehiclePurchased;
     FOnDealershipPreviewRequested          OnPreviewRequested;
+    FOnDealershipMenuRequested             OnMenuRequested;
 
     /** Currently highlighted definition in the list. */
     TWeakObjectPtr<UVehicleDefinition> SelectedDefinition;

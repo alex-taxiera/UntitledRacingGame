@@ -6,6 +6,7 @@
 #include "Engine/GameInstance.h"
 #include "VehicleInventory.h"
 #include "PlayerPerkManager.h"
+#include "PerkData.h"
 #include "RacingSaveGame.h"
 #include "RacingGameInstance.generated.h"
 
@@ -32,8 +33,24 @@ public:
     URacingGameInstance();
 
     // -----------------------------------------------------------------------
-    // Inventory access
+    // Designer-populated catalogues
+    // Set these in Project Settings once RacingGameInstance is the Game
+    // Instance Class — they appear under "Racing" in the class defaults.
     // -----------------------------------------------------------------------
+
+    /**
+     * All vehicle definitions available in the dealership.
+     * Add your UVehicleDefinition (or subclass) Data Assets here.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Racing|Catalogue")
+    TArray<TObjectPtr<UVehicleDefinition>> AllVehicles;
+
+    /**
+     * Complete perk catalogue.  Add all UPerkData assets here.
+     * The perk manager reads this array at runtime.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Racing|Catalogue")
+    TArray<TObjectPtr<UPerkData>> AllPerks;
 
     /**
      * The player's vehicle inventory.  Always valid after Init().

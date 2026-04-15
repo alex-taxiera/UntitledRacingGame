@@ -52,9 +52,8 @@ void USportsCarVehicleDefinition::PostInitProperties()
 {
     Super::PostInitProperties();
 
-    // Only fill defaults when this is a CDO or a freshly created asset
-    // (not when being loaded from an existing saved asset).
-    if (!HasAnyFlags(RF_ClassDefaultObject)) { return; }
+    // Only fill defaults on freshly created asset instances, not on the CDO.
+    if (HasAnyFlags(RF_ClassDefaultObject)) { return; }
 
     // -----------------------------------------------------------------------
     // Identity
@@ -108,9 +107,8 @@ void USportsCarVehicleDefinition::PostInitProperties()
 
     // --- Power Unit ---
     {
-        UVehiclePartData* PD = NewObject<UVehiclePartData>(this, TEXT("PartData_PowerUnit"));
-        PD->SlotType = EPartSlot::PowerUnit;
-        PD->SlotDisplayName = NSLOCTEXT("Parts", "PowerUnit", "Power Unit");
+        UVehiclePartData* PD = NewObject<UVehiclePartData>(this);
+        PD->PartSlot = EPartSlot::PowerUnit;
         PD->Levels.Add(MakePartLevel(
             NSLOCTEXT("Parts","PU1","Sport Tune"),
             NSLOCTEXT("Parts","PU1D","ECU remap and intake cleaning. Noticeable mid-range gain."),
@@ -128,9 +126,8 @@ void USportsCarVehicleDefinition::PostInitProperties()
 
     // --- Exhaust ---
     {
-        UVehiclePartData* PD = NewObject<UVehiclePartData>(this, TEXT("PartData_Exhaust"));
-        PD->SlotType = EPartSlot::Exhaust;
-        PD->SlotDisplayName = NSLOCTEXT("Parts", "Exhaust", "Exhaust");
+        UVehiclePartData* PD = NewObject<UVehiclePartData>(this);
+        PD->PartSlot = EPartSlot::Exhaust;
         PD->Levels.Add(MakePartLevel(
             NSLOCTEXT("Parts","EX1","Cat-Back"),
             NSLOCTEXT("Parts","EX1D","Straight-through cat-back exhaust. Light weight, good mid gain."),
@@ -148,9 +145,8 @@ void USportsCarVehicleDefinition::PostInitProperties()
 
     // --- Intake ---
     {
-        UVehiclePartData* PD = NewObject<UVehiclePartData>(this, TEXT("PartData_Intake"));
-        PD->SlotType = EPartSlot::Intake;
-        PD->SlotDisplayName = NSLOCTEXT("Parts", "Intake", "Intake");
+        UVehiclePartData* PD = NewObject<UVehiclePartData>(this);
+        PD->PartSlot = EPartSlot::Intake;
         PD->Levels.Add(MakePartLevel(
             NSLOCTEXT("Parts","IN1","Cold Air Intake"),
             NSLOCTEXT("Parts","IN1D","Draws cooler, denser air. Easy top-end improvement."),
@@ -168,9 +164,8 @@ void USportsCarVehicleDefinition::PostInitProperties()
 
     // --- Brake ---
     {
-        UVehiclePartData* PD = NewObject<UVehiclePartData>(this, TEXT("PartData_Brake"));
-        PD->SlotType = EPartSlot::Brake;
-        PD->SlotDisplayName = NSLOCTEXT("Parts", "Brake", "Brakes");
+        UVehiclePartData* PD = NewObject<UVehiclePartData>(this);
+        PD->PartSlot = EPartSlot::Brake;
         PD->Levels.Add(MakePartLevel(
             NSLOCTEXT("Parts","BR1","Sport Pads"),
             NSLOCTEXT("Parts","BR1D","High-friction pads with better fade resistance."),
@@ -188,9 +183,8 @@ void USportsCarVehicleDefinition::PostInitProperties()
 
     // --- Clutch ---
     {
-        UVehiclePartData* PD = NewObject<UVehiclePartData>(this, TEXT("PartData_Clutch"));
-        PD->SlotType = EPartSlot::Clutch;
-        PD->SlotDisplayName = NSLOCTEXT("Parts", "Clutch", "Clutch");
+        UVehiclePartData* PD = NewObject<UVehiclePartData>(this);
+        PD->PartSlot = EPartSlot::Clutch;
         PD->Levels.Add(MakePartLevel(
             NSLOCTEXT("Parts","CL1","Sport Clutch"),
             NSLOCTEXT("Parts","CL1D","Higher clamping force. Handles extra power without slip."),
@@ -208,9 +202,8 @@ void USportsCarVehicleDefinition::PostInitProperties()
 
     // --- LSD ---
     {
-        UVehiclePartData* PD = NewObject<UVehiclePartData>(this, TEXT("PartData_LSD"));
-        PD->SlotType = EPartSlot::LSD;
-        PD->SlotDisplayName = NSLOCTEXT("Parts", "LSD", "LSD");
+        UVehiclePartData* PD = NewObject<UVehiclePartData>(this);
+        PD->PartSlot = EPartSlot::LSD;
         PD->Levels.Add(MakePartLevel(
             NSLOCTEXT("Parts","LS1","1-Way LSD"),
             NSLOCTEXT("Parts","LS1D","Basic torque-sensing LSD. Tightens corner exit stability."),
@@ -228,9 +221,8 @@ void USportsCarVehicleDefinition::PostInitProperties()
 
     // --- Suspension ---
     {
-        UVehiclePartData* PD = NewObject<UVehiclePartData>(this, TEXT("PartData_Suspension"));
-        PD->SlotType = EPartSlot::Suspension;
-        PD->SlotDisplayName = NSLOCTEXT("Parts", "Suspension", "Suspension");
+        UVehiclePartData* PD = NewObject<UVehiclePartData>(this);
+        PD->PartSlot = EPartSlot::Suspension;
         PD->Levels.Add(MakePartLevel(
             NSLOCTEXT("Parts","SU1","Sport Springs"),
             NSLOCTEXT("Parts","SU1D","Lowered sport springs with uprated dampers. Cleaner cornering."),
@@ -251,9 +243,8 @@ void USportsCarVehicleDefinition::PostInitProperties()
 
     // --- Transmission ---
     {
-        UVehiclePartData* PD = NewObject<UVehiclePartData>(this, TEXT("PartData_Transmission"));
-        PD->SlotType = EPartSlot::Transmission;
-        PD->SlotDisplayName = NSLOCTEXT("Parts", "Transmission", "Transmission");
+        UVehiclePartData* PD = NewObject<UVehiclePartData>(this);
+        PD->PartSlot = EPartSlot::Transmission;
         PD->Levels.Add(MakePartLevel(
             NSLOCTEXT("Parts","TR1","Close-Ratio 6-Spd"),
             NSLOCTEXT("Parts","TR1D","Closer gear spacing. Keeps the engine on the boil."),
@@ -271,9 +262,8 @@ void USportsCarVehicleDefinition::PostInitProperties()
 
     // --- Body ---
     {
-        UVehiclePartData* PD = NewObject<UVehiclePartData>(this, TEXT("PartData_Body"));
-        PD->SlotType = EPartSlot::Body;
-        PD->SlotDisplayName = NSLOCTEXT("Parts", "Body", "Body");
+        UVehiclePartData* PD = NewObject<UVehiclePartData>(this);
+        PD->PartSlot = EPartSlot::Body;
         PD->Levels.Add(MakePartLevel(
             NSLOCTEXT("Parts","BO1","Aero Kit"),
             NSLOCTEXT("Parts","BO1D","Front lip and rear spoiler. Reduced drag, improved high-speed stability."),
@@ -291,9 +281,8 @@ void USportsCarVehicleDefinition::PostInitProperties()
 
     // --- Tire ---
     {
-        UVehiclePartData* PD = NewObject<UVehiclePartData>(this, TEXT("PartData_Tire"));
-        PD->SlotType = EPartSlot::Tire;
-        PD->SlotDisplayName = NSLOCTEXT("Parts", "Tire", "Tires");
+        UVehiclePartData* PD = NewObject<UVehiclePartData>(this);
+        PD->PartSlot = EPartSlot::Tire;
         PD->Levels.Add(MakePartLevel(
             NSLOCTEXT("Parts","TI1","Sport Compound"),
             NSLOCTEXT("Parts","TI1D","High-silica sport tyre. More grip in all conditions."),
@@ -314,9 +303,8 @@ void USportsCarVehicleDefinition::PostInitProperties()
 
     // --- Nitro ---
     {
-        UVehiclePartData* PD = NewObject<UVehiclePartData>(this, TEXT("PartData_Nitro"));
-        PD->SlotType = EPartSlot::Nitro;
-        PD->SlotDisplayName = NSLOCTEXT("Parts", "Nitro", "Nitro System");
+        UVehiclePartData* PD = NewObject<UVehiclePartData>(this);
+        PD->PartSlot = EPartSlot::Nitro;
         PD->Levels.Add(MakePartLevel(
             NSLOCTEXT("Parts","NI1","Wet Shot"),
             NSLOCTEXT("Parts","NI1D","Single-stage wet nitrous kit. Short but potent boost."),
