@@ -24,7 +24,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnRacerDefeated,
     bool, bPlayerDefeated);
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnTimedEffectExpired,
-    bool, bIsPlayer, FPerkSkillEffect, Effect);
+    bool, bIsPlayer, FPerkEffectData, Effect);
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnBattleStarted);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnBattleEnded);

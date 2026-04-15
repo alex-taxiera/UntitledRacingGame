@@ -78,7 +78,7 @@ int32 UCharacterPerkState::GetSkillSlotCount(const TArray<UPerkData*>& AllPerks,
         UPerkData* Perk = FindPerk(AllPerks, PerkID);
         if (!Perk) { continue; }
 
-        for (const FPerkSkillEffect& Effect : Perk->GetAllEffects())
+        for (const FPerkEffectData& Effect : Perk->GetAllEffects())
         {
             if (Effect.bIsPassive && Effect.EffectType == ESkillEffectType::SkillSlotIncrease)
             {
@@ -130,17 +130,17 @@ bool UCharacterPerkState::UnequipSkill(FName PerkID)
 // Effect queries  (draw only from EquippedSkillPerkIDs)
 // ---------------------------------------------------------------------------
 
-TArray<FPerkSkillEffect> UCharacterPerkState::GetAllPassiveEffects(
+TArray<FPerkEffectData> UCharacterPerkState::GetAllPassiveEffects(
     const TArray<UPerkData*>& AllPerks) const
 {
-    TArray<FPerkSkillEffect> Out;
+    TArray<FPerkEffectData> Out;
 
     for (const FName& PerkID : EquippedSkillPerkIDs)
     {
         UPerkData* Perk = FindPerk(AllPerks, PerkID);
         if (!Perk) { continue; }
 
-        for (const FPerkSkillEffect& Effect : Perk->GetAllEffects())
+        for (const FPerkEffectData& Effect : Perk->GetAllEffects())
         {
             // SkillSlotIncrease is accounted for separately in GetSkillSlotCount.
             if (Effect.bIsPassive && Effect.EffectType != ESkillEffectType::SkillSlotIncrease)
@@ -153,17 +153,17 @@ TArray<FPerkSkillEffect> UCharacterPerkState::GetAllPassiveEffects(
     return Out;
 }
 
-TArray<FPerkSkillEffect> UCharacterPerkState::GetAllActiveEffects(
+TArray<FPerkEffectData> UCharacterPerkState::GetAllActiveEffects(
     const TArray<UPerkData*>& AllPerks) const
 {
-    TArray<FPerkSkillEffect> Out;
+    TArray<FPerkEffectData> Out;
 
     for (const FName& PerkID : EquippedSkillPerkIDs)
     {
         UPerkData* Perk = FindPerk(AllPerks, PerkID);
         if (!Perk) { continue; }
 
-        for (const FPerkSkillEffect& Effect : Perk->GetAllEffects())
+        for (const FPerkEffectData& Effect : Perk->GetAllEffects())
         {
             if (!Effect.bIsPassive)
             {

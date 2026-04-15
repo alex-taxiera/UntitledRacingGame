@@ -39,7 +39,7 @@ public:
      * Blueprint subclasses can read this to know the magnitude / duration.
      */
     UPROPERTY(BlueprintReadOnly, Category = "PerkEffect")
-    FPerkSkillEffect EffectData;
+    FPerkEffectData EffectData;
 
     /**
      * The actor (pawn) this effect is acting on.
@@ -53,7 +53,7 @@ public:
     // -----------------------------------------------------------------------
 
     /** Activates this effect. Calls the Blueprint event OnEffectApplied. */
-    void ApplyEffect(AActor* InOwner, const FPerkSkillEffect& InData);
+    void ApplyEffect(AActor* InOwner, const FPerkEffectData& InData);
 
     /** Deactivates this effect. Calls the Blueprint event OnEffectRemoved. */
     void RemoveEffect();

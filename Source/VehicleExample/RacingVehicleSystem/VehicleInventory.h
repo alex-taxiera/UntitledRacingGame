@@ -135,9 +135,27 @@ public:
     // Queries
     // -----------------------------------------------------------------------
 
-    /** Returns all owned vehicle instances. */
+    /**
+     * Returns all owned vehicle instances in a Blueprint-friendly array.
+     * (Raw UObject pointers are required for UFUNCTION signatures.)
+     */
     UFUNCTION(BlueprintCallable, Category = "VehicleInventory")
-    const TArray<TObjectPtr<UOwnedVehicle>>& GetOwnedVehicles() const { return OwnedVehicles; }
+    TArray<UOwnedVehicle*> GetOwnedVehicles() const
+    {
+        TArray<UOwnedVehicle*> Out;
+        Out.Reserve(OwnedVehicles.Num());
+        for (const TObjectPtr<UOwnedVehicle>& Vehicle : OwnedVehicles)
+        {
+            if (Vehicle)
+            {
+                Out.Add(Vehicle.Get());
+            }
+        }
+        return Out;
+    }
+
+    /** Internal C++ accessor that avoids array copy. */
+    const TArray<TObjectPtr<UOwnedVehicle>>& GetOwnedVehiclesRef() const { return OwnedVehicles; }
 
     /** Finds an owned vehicle by its instance GUID, returns nullptr if not found. */
     UFUNCTION(BlueprintCallable, Category = "VehicleInventory")

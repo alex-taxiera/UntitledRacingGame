@@ -2,9 +2,9 @@
 
 #include "PerkData.h"
 
-TArray<FPerkSkillEffect> UPerkData::GetAllEffects() const
+TArray<FPerkEffectData> UPerkData::GetAllEffects() const
 {
-    TArray<FPerkSkillEffect> Out;
+    TArray<FPerkEffectData> Out;
 
     if (Tree == EPerkTree::Driver)
     {

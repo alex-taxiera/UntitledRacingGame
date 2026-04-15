@@ -136,20 +136,20 @@ public:
     // -----------------------------------------------------------------------
 
     /**
-     * Returns all passive FPerkSkillEffect entries from EQUIPPED skill perks only.
+     * Returns all passive FPerkEffectData entries from EQUIPPED skill perks only.
      * Unlocked-but-unequipped skills contribute no effects.
      * SkillSlotIncrease effects are intentionally excluded here; use
      * GetSkillSlotCount() to account for those.
      */
     UFUNCTION(BlueprintCallable, Category = "CharacterPerkState")
-    TArray<FPerkSkillEffect> GetAllPassiveEffects(const TArray<UPerkData*>& AllPerks) const;
+    TArray<FPerkEffectData> GetAllPassiveEffects(const TArray<UPerkData*>& AllPerks) const;
 
     /**
-     * Returns all active (non-passive) FPerkSkillEffect entries from EQUIPPED
+     * Returns all active (non-passive) FPerkEffectData entries from EQUIPPED
      * skill perks only.  Applied at race start, removed after their Duration.
      */
     UFUNCTION(BlueprintCallable, Category = "CharacterPerkState")
-    TArray<FPerkSkillEffect> GetAllActiveEffects(const TArray<UPerkData*>& AllPerks) const;
+    TArray<FPerkEffectData> GetAllActiveEffects(const TArray<UPerkData*>& AllPerks) const;
 
     /**
      * Returns custom Blueprint effect class pointers from EQUIPPED skill perks only.

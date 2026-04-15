@@ -6,6 +6,7 @@
 #include "Engine/GameInstance.h"
 #include "VehicleInventory.h"
 #include "PlayerPerkManager.h"
+#include "RacingSaveGame.h"
 #include "RacingGameInstance.generated.h"
 
 /**
@@ -69,21 +70,57 @@ public:
     virtual void Init() override;
 
     // -----------------------------------------------------------------------
-    // Save / Load  (stubs — wire to your save system)
+    // Save / Load / Delete
     // -----------------------------------------------------------------------
 
+    /** Returns true if a save file exists on disk. */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Racing|Save")
+    bool HasSaveGame() const;
+
     /**
-     * Serialises the inventory state (owned vehicles, currency, points) to a
-     * save slot.  Implementation left as a stub — fill in when your save
-     * system is ready.
+     * Serialises the current game state (inventory + perk manager) to disk.
+     * Call this whenever the player makes progress that should persist.
      */
     UFUNCTION(BlueprintCallable, Category = "Racing|Save")
     void SaveGame();
 
     /**
-     * Deserialises inventory state from the given save slot.
-     * Implementation left as a stub.
+     * Deserialises the save file from disk and restores all state.
+     * Safe to call even if no save exists (does nothing in that case).
      */
     UFUNCTION(BlueprintCallable, Category = "Racing|Save")
     void LoadGame();
+
+    /**
+     * Permanently deletes the save file from disk and resets in-memory state
+     * to defaults.  The title screen calls this after the player confirms.
+     */
+    UFUNCTION(BlueprintCallable, Category = "Racing|Save")
+    void DeleteSave();
+
+    // -----------------------------------------------------------------------
+    // Game Flow
+    // -----------------------------------------------------------------------
+
+    /**
+     * Starts a fresh game: resets all state and opens the game level.
+     * Does NOT delete any existing save — call DeleteSave() first if needed.
+     */
+    UFUNCTION(BlueprintCallable, Category = "Racing")
+    void StartNewGame();
+
+    /**
+     * Loads the existing save then opens the game level.
+     * No-op if no save exists — the title screen should hide this button in that case.
+     */
+    UFUNCTION(BlueprintCallable, Category = "Racing")
+    void ContinueGame();
+
+private:
+
+    /**
+     * The level to open when starting or continuing a game.
+     * Change this name to match your actual gameplay level.
+     */
+    static const FName GameLevelName;
 };

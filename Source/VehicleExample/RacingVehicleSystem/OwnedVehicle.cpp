@@ -496,4 +496,3 @@ bool UOwnedVehicle::SetTorqueBalanceFrontBias(int32 FrontBias)
     TorqueBalance.FrontBias = FMath::Clamp(FrontBias, Def.MinFrontBias, Def.MaxFrontBias);
     return true;
 }
-}

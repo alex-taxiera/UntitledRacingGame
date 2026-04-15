@@ -184,7 +184,7 @@ TArray<FText> URaceBattleManager::GetActiveTimedEffectNames(bool bPlayer,
 
     for (int32 i = 0; i < State.ActiveTimedEffects.Num(); ++i)
     {
-        const FPerkSkillEffect& Effect = State.ActiveTimedEffects[i];
+        const FPerkEffectData& Effect = State.ActiveTimedEffects[i];
         const float Elapsed = State.TimedEffectElapsed.IsValidIndex(i)
                             ? State.TimedEffectElapsed[i] : 0.0f;
 
@@ -196,13 +196,13 @@ TArray<FText> URaceBattleManager::GetActiveTimedEffectNames(bool bPlayer,
             for (UPerkData* Perk : AllPerks)
             {
                 if (!Perk) { continue; }
-                for (const FPerkSkillEffect& E : Perk->GetAllEffects())
+                for (const FPerkEffectData& E : Perk->GetAllEffects())
                 {
                     if (E.EffectType == Effect.EffectType &&
                         FMath::IsNearlyEqual(E.Magnitude, Effect.Magnitude) &&
                         FMath::IsNearlyEqual(E.Duration, Effect.Duration))
                     {
-                        Out.AddUnique(Perk->DisplayName);
+                        Out.Add(Perk->DisplayName);
                         break;
                     }
                 }
@@ -248,9 +248,9 @@ void URaceBattleManager::InitialiseRacerState(FRacerBattleState& OutState,
         UPerkSkillEffect* EffectObj = NewObject<UPerkSkillEffect>(EffectOuter, Class);
         if (EffectObj)
         {
-            // Use a blank FPerkSkillEffect as the data carrier for custom effects;
+            // Use a blank FPerkEffectData as the data carrier for custom effects;
             // the Blueprint implementation reads any needed data from its asset directly.
-            EffectObj->ApplyEffect(nullptr, FPerkSkillEffect());
+            EffectObj->ApplyEffect(nullptr, FPerkEffectData());
             OutState.LiveCustomEffects.Add(EffectObj);
         }
     }
@@ -277,7 +277,7 @@ void URaceBattleManager::TickTimedEffects(FRacerBattleState& State, bool bIsPlay
 {
     for (int32 i = State.ActiveTimedEffects.Num() - 1; i >= 0; --i)
     {
-        const FPerkSkillEffect& Effect = State.ActiveTimedEffects[i];
+        const FPerkEffectData& Effect = State.ActiveTimedEffects[i];
 
         // Duration 0 means last the full race — never expire
         if (Effect.Duration <= 0.0f) { continue; }
@@ -286,7 +286,7 @@ void URaceBattleManager::TickTimedEffects(FRacerBattleState& State, bool bIsPlay
 
         if (State.TimedEffectElapsed[i] >= Effect.Duration)
         {
-            const FPerkSkillEffect Expired = State.ActiveTimedEffects[i];
+            const FPerkEffectData Expired = State.ActiveTimedEffects[i];
             State.ActiveTimedEffects.RemoveAt(i);
             State.TimedEffectElapsed.RemoveAt(i);
             OnTimedEffectExpired.Broadcast(bIsPlayer, Expired);

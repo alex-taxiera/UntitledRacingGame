@@ -70,13 +70,13 @@ enum class ESkillEffectType : uint8
 
     /**
      * Temporary Attack bonus applied at race start.
-     * Duration (seconds) stored in FPerkSkillEffect::Duration.
+     * Duration (seconds) stored in FPerkEffectData::Duration.
      */
     AttackBoostTimed            UMETA(DisplayName = "Attack Boost (Timed)"),
 
     /**
      * Temporary Defense bonus applied at race start.
-     * Duration (seconds) stored in FPerkSkillEffect::Duration.
+     * Duration (seconds) stored in FPerkEffectData::Duration.
      */
     DefenseBoostTimed           UMETA(DisplayName = "Defense Boost (Timed)"),
 
@@ -113,7 +113,7 @@ enum class ESkillEffectType : uint8
  * Active effects are applied at the start of a race battle and removed after Duration.
  */
 USTRUCT(BlueprintType)
-struct FPerkSkillEffect
+struct FPerkEffectData
 {
     GENERATED_BODY()
 
@@ -239,14 +239,14 @@ struct FRacerBattleState
      * Does not include SkillSlotIncrease (handled by the perk manager).
      */
     UPROPERTY(BlueprintReadOnly, Category = "Battle")
-    TArray<FPerkSkillEffect> PassiveEffects;
+    TArray<FPerkEffectData> PassiveEffects;
 
     /**
      * Timed effects currently running (applied at race start, expire after Duration).
      * Entries are removed when their elapsed time exceeds Duration.
      */
     UPROPERTY(BlueprintReadOnly, Category = "Battle")
-    TArray<FPerkSkillEffect> ActiveTimedEffects;
+    TArray<FPerkEffectData> ActiveTimedEffects;
 
     /**
      * Elapsed time in seconds for each entry in ActiveTimedEffects (parallel array).
@@ -278,7 +278,7 @@ struct FRacerBattleState
     float GetTotalDamageReduction() const
     {
         float Total = 0.0f;
-        for (const FPerkSkillEffect& E : PassiveEffects)
+        for (const FPerkEffectData& E : PassiveEffects)
         {
             if (E.bIsPassive && E.EffectType == ESkillEffectType::DamageReduction)
             {
@@ -286,7 +286,7 @@ struct FRacerBattleState
             }
         }
         // Also check timed effects still running
-        for (const FPerkSkillEffect& E : ActiveTimedEffects)
+        for (const FPerkEffectData& E : ActiveTimedEffects)
         {
             if (E.EffectType == ESkillEffectType::DamageReduction)
             {
@@ -300,14 +300,14 @@ struct FRacerBattleState
     float GetTotalWallDamageReduction() const
     {
         float Total = 0.0f;
-        for (const FPerkSkillEffect& E : PassiveEffects)
+        for (const FPerkEffectData& E : PassiveEffects)
         {
             if (E.bIsPassive && E.EffectType == ESkillEffectType::WallDamageReduction)
             {
                 Total += E.Magnitude;
             }
         }
-        for (const FPerkSkillEffect& E : ActiveTimedEffects)
+        for (const FPerkEffectData& E : ActiveTimedEffects)
         {
             if (E.EffectType == ESkillEffectType::WallDamageReduction)
             {
@@ -321,7 +321,7 @@ struct FRacerBattleState
     float GetTotalHealthOnNitro() const
     {
         float Total = 0.0f;
-        for (const FPerkSkillEffect& E : PassiveEffects)
+        for (const FPerkEffectData& E : PassiveEffects)
         {
             if (E.bIsPassive && E.EffectType == ESkillEffectType::HealthOnNitro)
             {

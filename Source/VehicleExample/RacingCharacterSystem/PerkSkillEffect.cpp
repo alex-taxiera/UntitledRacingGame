@@ -2,7 +2,7 @@
 
 #include "PerkSkillEffect.h"
 
-void UPerkSkillEffect::ApplyEffect(AActor* InOwner, const FPerkSkillEffect& InData)
+void UPerkSkillEffect::ApplyEffect(AActor* InOwner, const FPerkEffectData& InData)
 {
     OwningActor = InOwner;
     EffectData  = InData;

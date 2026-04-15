@@ -79,7 +79,7 @@ struct FDriverStatPerkPayload
 
 /**
  * Payload for EPerkTree::Driver skill-type perks.
- * A skill perk can carry any number of FPerkSkillEffect entries (the known C++ path)
+ * A skill perk can carry any number of FPerkEffectData entries (the known C++ path)
  * and optionally a Blueprint UPerkSkillEffect subclass for custom logic.
  */
 USTRUCT(BlueprintType)
@@ -92,7 +92,7 @@ struct FDriverSkillPerkPayload
      * Passive entries are always active; active entries are applied at race start.
      */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DriverSkill")
-    TArray<FPerkSkillEffect> Effects;
+    TArray<FPerkEffectData> Effects;
 
     /**
      * Optional Blueprint-implemented effect object for logic that cannot be
@@ -115,7 +115,7 @@ struct FGlobalPerkPayload
     GENERATED_BODY()
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GlobalPerk")
-    TArray<FPerkSkillEffect> Effects;
+    TArray<FPerkEffectData> Effects;
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GlobalPerk")
     TSoftClassPtr<UPerkSkillEffect> CustomEffectClass;
@@ -249,11 +249,11 @@ public:
     }
 
     /**
-     * Returns all FPerkSkillEffect entries this perk contributes.
+     * Returns all FPerkEffectData entries this perk contributes.
      * Aggregates from both SkillPayload.Effects and GlobalPerkPayload.Effects.
      */
     UFUNCTION(BlueprintCallable, Category = "PerkData")
-    TArray<FPerkSkillEffect> GetAllEffects() const;
+    TArray<FPerkEffectData> GetAllEffects() const;
 
     /**
      * Returns the soft class pointer to the custom Blueprint effect, if any.
