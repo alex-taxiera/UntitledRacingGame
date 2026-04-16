@@ -8,7 +8,7 @@
 #include "VehicleDefinition.h"
 
 const FName URacingGameInstance::GameLevelName  = TEXT("Hub");
-const FName URacingGameInstance::CourseLevelName = TEXT("CourseLevel");
+const FName URacingGameInstance::CourseLevelName = TEXT("VehicleBasic");
 const FName URacingGameInstance::TitleLevelName  = TEXT("TitleScreen");
 const int32 URacingGameInstance::StartingCurrency = 10000000;
 

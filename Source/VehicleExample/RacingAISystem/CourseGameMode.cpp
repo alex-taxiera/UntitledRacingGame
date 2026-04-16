@@ -16,29 +16,71 @@
 #include "Engine/GameViewportClient.h"
 #include "Engine/PlayerStartPIE.h"
 #include "GameFramework/PlayerController.h"
-#include "GameFramework/PlayerStart.h"
-#include "EnhancedInputSubsystems.h"
-#include "InputMappingContext.h"
+#include "ChaosWheeledVehicleMovementComponent.h"
+#include "DrawDebugHelpers.h"
 
 ACourseGameMode::ACourseGameMode()
 {
-    // Suppress the engine auto-spawning a default pawn.
-    // We spawn the correct vehicle pawn ourselves in BeginPlay.
+    // DefaultPawnClass starts null; InitGame sets it from the player's
+    // selected vehicle before any player connects.
     DefaultPawnClass = nullptr;
+}
+
+void ACourseGameMode::InitGame(const FString& MapName,
+                               const FString& Options,
+                               FString&       ErrorMessage)
+{
+    Super::InitGame(MapName, Options, ErrorMessage);
+
+    URacingGameInstance* GI = URacingGameInstance::Get(this);
+    if (!GI)
+    {
+        UE_LOG(LogTemp, Error, TEXT("CourseGameMode::InitGame — no GameInstance"));
+        return;
+    }
+
+    UVehicleInventory* Inventory = GI->GetVehicleInventory();
+    UOwnedVehicle*     Vehicle   = Inventory ? Inventory->GetCurrentVehicle() : nullptr;
+
+    if (Vehicle && Vehicle->Definition)
+    {
+        UClass* PawnClass = Vehicle->Definition->PawnClass.LoadSynchronous();
+        if (PawnClass)
+        {
+            DefaultPawnClass = PawnClass;
+            UE_LOG(LogTemp, Warning,
+                TEXT("CourseGameMode::InitGame — DefaultPawnClass set to '%s'"),
+                *PawnClass->GetName());
+            return;
+        }
+    }
+
+    UE_LOG(LogTemp, Error,
+        TEXT("CourseGameMode::InitGame — could not resolve vehicle pawn class. ")
+        TEXT("Make sure the player has purchased a vehicle and DA_VehicleDefinition.PawnClass is set."));
 }
 
 void ACourseGameMode::BeginPlay()
 {
     Super::BeginPlay();
 
-    // Spawn the player's selected vehicle first so GetPlayerVehiclePawn()
-    // returns a valid pawn when SpawnNPCs() runs.
-    SpawnPlayerVehicle();
+    UE_LOG(LogTemp, Warning, TEXT("=== CourseGameMode::BeginPlay ==="));
+
+    // Explicitly restore game input in case UIOnly mode carried over from hub.
+    APlayerController* PC = GetWorld()->GetFirstPlayerController();
+    if (PC)
+    {
+        PC->SetInputMode(FInputModeGameOnly());
+        PC->bShowMouseCursor = false;
+    }
 
     SpawnManager = NewObject<UCourseNPCSpawnManager>(this, TEXT("SpawnManager"));
     SpawnManager->MaxNPCsOnCourse = MaxNPCsOnCourse;
 
     SpawnNPCs();
+
+    GetWorldTimerManager().SetTimer(DiagnosticTimerHandle,
+        this, &ACourseGameMode::LogVehicleDiagnostics, 1.0f, false);
 }
 
 // ---------------------------------------------------------------------------
@@ -217,83 +259,93 @@ ACourseSplineActor* ACourseGameMode::FindCourseSplineActor() const
     return nullptr;
 }
 
-AVehicleExamplePawn* ACourseGameMode::SpawnPlayerVehicle()
+// ---------------------------------------------------------------------------
+// Diagnostics
+// ---------------------------------------------------------------------------
+
+void ACourseGameMode::LogVehicleDiagnostics()
 {
-    URacingGameInstance* GI = URacingGameInstance::Get(this);
-    if (!GI) { return nullptr; }
+    UE_LOG(LogTemp, Warning, TEXT("===== COURSE DIAG ====="));
+    UE_LOG(LogTemp, Warning, TEXT("DIAG: World gravity Z = %.1f"), GetWorld()->GetDefaultGravityZ());
 
-    UVehicleInventory* Inventory = GI->GetVehicleInventory();
-    if (!Inventory) { return nullptr; }
-
-    UOwnedVehicle* OwnedVehicle = Inventory->GetCurrentVehicle();
-    if (!OwnedVehicle || !OwnedVehicle->Definition)
-    {
-        UE_LOG(LogTemp, Error,
-            TEXT("ACourseGameMode: No current vehicle selected. ")
-            TEXT("Make sure the player has purchased a vehicle and CurrentVehicleID is set."));
-        return nullptr;
-    }
-
-    UE_LOG(LogTemp, Log, TEXT("ACourseGameMode: Spawning player vehicle '%s'."),
-        *OwnedVehicle->Definition->VehicleID.ToString());
-
-    // Load the pawn class synchronously
-    UClass* PawnClass = OwnedVehicle->Definition->PawnClass.LoadSynchronous();
-    if (!PawnClass)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("ACourseGameMode: PawnClass not set on vehicle definition '%s'."),
-            *OwnedVehicle->Definition->VehicleID.ToString());
-        return nullptr;
-    }
-
-    // Find the first PlayerStart in the level
-    FTransform SpawnTransform = FTransform::Identity;
-    for (TActorIterator<APlayerStart> It(GetWorld()); It; ++It)
-    {
-        SpawnTransform = It->GetActorTransform();
-        // Apply Z offset so Chaos suspension has room to settle
-        FVector Loc = SpawnTransform.GetLocation();
-        Loc.Z += PlayerSpawnZOffset;
-        SpawnTransform.SetLocation(Loc);
-        break;
-    }
-
-    FActorSpawnParameters Params;
-    Params.SpawnCollisionHandlingOverride =
-        ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-
-    AVehicleExamplePawn* PlayerPawn = GetWorld()->SpawnActor<AVehicleExamplePawn>(
-        PawnClass, SpawnTransform, Params);
-
-    if (!PlayerPawn)
-    {
-        UE_LOG(LogTemp, Error, TEXT("ACourseGameMode: Failed to spawn player pawn."));
-        return nullptr;
-    }
-
+    // --- Player controller state ---
     APlayerController* PC = GetWorld()->GetFirstPlayerController();
     if (PC)
     {
-        PC->Possess(PlayerPawn);
-
-        // Add the vehicle Enhanced Input Mapping Context.
-        // This replaces what the Blueprint BeginPlay normally does when
-        // the pawn is possessed through the standard flow.
-        if (VehicleInputMappingContext)
-        {
-            if (ULocalPlayer* LP = PC->GetLocalPlayer())
-            {
-                if (UEnhancedInputLocalPlayerSubsystem* Subsystem =
-                    LP->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>())
-                {
-                    Subsystem->AddMappingContext(VehicleInputMappingContext, 0);
-                }
-            }
-        }
+        UE_LOG(LogTemp, Warning,
+            TEXT("DIAG: PlayerController='%s' | PossessedPawn='%s' | ShowCursor=%d"),
+            *PC->GetClass()->GetName(),
+            PC->GetPawn() ? *PC->GetPawn()->GetClass()->GetName() : TEXT("NONE"),
+            PC->bShowMouseCursor);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("DIAG: No PlayerController found!"));
     }
 
-    UE_LOG(LogTemp, Log, TEXT("ACourseGameMode: Spawned player pawn '%s'."),
-        *PawnClass->GetName());
+    // --- Player pawn ---
+    AVehicleExamplePawn* PlayerPawn = GetPlayerVehiclePawn();
+    if (!PlayerPawn)
+    {
+        UE_LOG(LogTemp, Error,
+            TEXT("DIAG: No player pawn possessed. SpawnPlayerVehicle likely returned early."));
+    }
+    else
+    {
+        const FVector Pos = PlayerPawn->GetActorLocation();
+        const FVector Vel = PlayerPawn->GetVelocity();
+        const bool bSimulating = PlayerPawn->GetMesh()
+            ? PlayerPawn->GetMesh()->IsSimulatingPhysics() : false;
 
-    return PlayerPawn;
+        UChaosWheeledVehicleMovementComponent* Move =
+            Cast<UChaosWheeledVehicleMovementComponent>(
+                PlayerPawn->GetVehicleMovement());
+
+        const bool bOnGround = Move ? Move->IsMovingOnGround() : false;
+
+        UE_LOG(LogTemp, Warning,
+            TEXT("DIAG: Player pawn '%s' | Pos=(%.0f, %.0f, %.0f) | Vel=(%.1f, %.1f, %.1f) | SimPhys=%d | OnGround=%d"),
+            *PlayerPawn->GetClass()->GetName(),
+            Pos.X, Pos.Y, Pos.Z,
+            Vel.X, Vel.Y, Vel.Z,
+            bSimulating, bOnGround);
+
+        // Draw a debug sphere at spawn location for 10 seconds
+        DrawDebugSphere(GetWorld(), Pos, 80.f, 12,
+            bOnGround ? FColor::Green : FColor::Red, false, 10.f);
+    }
+
+    // --- NPC pawns ---
+    for (TObjectPtr<ANPCPatrolActor>& Patrol : PatrolActors)
+    {
+        if (!Patrol) { continue; }
+        AVehicleExamplePawn* NPCPawn = Patrol->GetNPCPawn();
+        if (!NPCPawn)
+        {
+            UE_LOG(LogTemp, Warning,
+                TEXT("DIAG: PatrolActor '%s' has no pawn (SpawnNPCPawn failed)."),
+                *Patrol->GetName());
+            continue;
+        }
+        const FVector NPos = NPCPawn->GetActorLocation();
+        const bool bNSim  = NPCPawn->GetMesh()
+            ? NPCPawn->GetMesh()->IsSimulatingPhysics() : false;
+        UE_LOG(LogTemp, Warning,
+            TEXT("DIAG: NPC '%s' | Pos=(%.0f, %.0f, %.0f) | SimPhys=%d"),
+            *NPCPawn->GetClass()->GetName(), NPos.X, NPos.Y, NPos.Z, bNSim);
+        DrawDebugSphere(GetWorld(), NPos, 80.f, 12, FColor::Yellow, false, 10.f);
+    }
+
+    // --- PlayerStart location ---
+    for (TActorIterator<APlayerStart> It(GetWorld()); It; ++It)
+    {
+        UE_LOG(LogTemp, Warning,
+            TEXT("DIAG: PlayerStart at (%.0f, %.0f, %.0f)"),
+            It->GetActorLocation().X,
+            It->GetActorLocation().Y,
+            It->GetActorLocation().Z);
+        break;
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("===== END DIAG ====="));
 }

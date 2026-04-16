@@ -18,6 +18,8 @@ void AHubGameMode::BeginPlay()
 {
     Super::BeginPlay();
 
+    UE_LOG(LogTemp, Warning, TEXT("=== HubGameMode::BeginPlay ==="));
+
     // Spawn the display actor off to the side, out of the player camera's view
     FActorSpawnParameters SpawnParams;
     SpawnParams.Name = TEXT("HubVehicleDisplayActor");
