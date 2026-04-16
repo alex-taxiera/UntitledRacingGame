@@ -35,7 +35,7 @@ void ACourseGameMode::InitGame(const FString& MapName,
     URacingGameInstance* GI = URacingGameInstance::Get(this);
     if (!GI)
     {
-        UE_LOG(LogTemp, Error, TEXT("CourseGameMode::InitGame — no GameInstance"));
+        UE_LOG(LogTemp, Error, TEXT("CourseGameMode::InitGame ï¿½ no GameInstance"));
         return;
     }
 
@@ -49,14 +49,14 @@ void ACourseGameMode::InitGame(const FString& MapName,
         {
             DefaultPawnClass = PawnClass;
             UE_LOG(LogTemp, Warning,
-                TEXT("CourseGameMode::InitGame — DefaultPawnClass set to '%s'"),
+                TEXT("CourseGameMode::InitGame ï¿½ DefaultPawnClass set to '%s'"),
                 *PawnClass->GetName());
             return;
         }
     }
 
     UE_LOG(LogTemp, Error,
-        TEXT("CourseGameMode::InitGame — could not resolve vehicle pawn class. ")
+        TEXT("CourseGameMode::InitGame ï¿½ could not resolve vehicle pawn class. ")
         TEXT("Make sure the player has purchased a vehicle and DA_VehicleDefinition.PawnClass is set."));
 }
 
@@ -123,7 +123,7 @@ void ACourseGameMode::SpawnNPCs()
         }
 
         // Pick a random point along the spline as the spawn location
-        FVector SpawnLocation = FVector::ZeroVector; // fallback
+        FVector SpawnLocation = FVector(0,0,500); // fallback
         FRotator SpawnRotation = FRotator::ZeroRotator;
         if (Spline)
         {
