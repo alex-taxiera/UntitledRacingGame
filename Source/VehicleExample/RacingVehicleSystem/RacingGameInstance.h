@@ -134,6 +134,14 @@ public:
     void ContinueGame();
 
     /**
+     * Saves the game then loads the course level.
+     * The course game mode reads CurrentVehicle from the inventory to
+     * spawn the correct player pawn.
+     */
+    UFUNCTION(BlueprintCallable, Category = "Racing")
+    void StartCourse();
+
+    /**
      * Resets in-memory state and returns to the title screen level.
      * Does NOT delete the save file — progress is preserved.
      * Called by the hub System menu "Return to Title" button.
@@ -145,6 +153,9 @@ private:
 
     /** The level to open when starting or continuing a game. */
     static const FName GameLevelName;
+
+    /** The course / race level name. */
+    static const FName CourseLevelName;
 
     /** The title screen level name. */
     static const FName TitleLevelName;

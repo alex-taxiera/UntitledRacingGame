@@ -74,9 +74,11 @@ void ARacingAIController::ApplyDifficultyOverride(const FAIDifficultyOverride& G
 
 void ARacingAIController::StartRace()
 {
+    bIdleActive = false;
     bRaceActive = true;
     TimeSinceLastReaction = 0.0f;
     TimeInCurrentState    = 0.0f;
+    ActiveStates.Reset();
     ActiveStates.Add(ERacingAIState::Racing);
 }
 
@@ -88,6 +90,28 @@ void ARacingAIController::EndRace()
     SetThrottle(0.0f);
     SetSteering(0.0f);
     SetBrake(0.0f);
+}
+
+void ARacingAIController::StartIdle()
+{
+    if (bRaceActive) { return; }
+    bIdleActive = true;
+    ActiveStates.Reset();
+    ActiveStates.Add(ERacingAIState::Idle);
+}
+
+void ARacingAIController::StopIdle()
+{
+    bIdleActive = false;
+    ActiveStates.Remove(ERacingAIState::Idle);
+    SetThrottle(0.0f);
+    SetSteering(0.0f);
+    SetBrake(0.0f);
+}
+
+void ARacingAIController::SetPatrolSpline(URacingSplineComponent* InSpline)
+{
+    PatrolSpline = InSpline;
 }
 
 // ---------------------------------------------------------------------------
@@ -127,7 +151,7 @@ void ARacingAIController::Tick(float DeltaSeconds)  // NOLINT
 {
     Super::Tick(DeltaSeconds);
 
-    if (!bRaceActive) { return; }
+    if (!bRaceActive && !bIdleActive) { return; }
 
     // Decay cooldowns every frame
     for (float& CD : BehaviorRuleCooldowns) { CD = FMath::Max(0.0f, CD - DeltaSeconds); }
@@ -335,6 +359,13 @@ void ARacingAIController::ExecuteState()
 {
     if (!OwnPawn || !RacerData) { return; }
 
+    // --- Idle patrol mode: bypass race state machine entirely ---
+    if (bIdleActive && ActiveStates.Contains(ERacingAIState::Idle))
+    {
+        Execute_Idle();
+        return;
+    }
+
     float Throttle = 1.0f;
     float Steering = 0.0f;
     float Brake    = 0.0f;
@@ -410,6 +441,38 @@ void ARacingAIController::ExecuteState()
 void ARacingAIController::Execute_Racing()
 {
     // Baseline: full throttle, steer toward spline — handled in ExecuteState
+}
+
+void ARacingAIController::Execute_Idle()
+{
+    if (!OwnPawn) { return; }
+
+    URacingSplineComponent* Spline = PatrolSpline ? PatrolSpline : RacingSpline;
+    if (!Spline) { return; }
+
+    const float IdleThrottle = RacerData
+        ? RacerData->AIConfig.IdleThrottle
+        : 0.35f;
+    const float FollowStrength = RacerData
+        ? RacerData->AIConfig.IdleSplineFollowStrength
+        : 0.65f;
+
+    const float SplineLen  = Spline->GetSplineLength();
+    const FVector MyPos    = OwnPawn->GetActorLocation();
+    const float  NearDist  = Spline->GetNearestSplineDistance(MyPos);
+    // Look ahead a fixed 800 cm for the follow target
+    const float  TargetDist = FMath::Fmod(NearDist + 800.f, SplineLen);
+    const FVector TargetPos = Spline->GetLocationAtDistance(TargetDist);
+
+    // Steering: signed angle to target in actor-local space
+    const FVector ToTarget   = (TargetPos - MyPos).GetSafeNormal();
+    const FVector RightVec   = OwnPawn->GetActorRightVector();
+    const float   Lateral    = FVector::DotProduct(ToTarget, RightVec);
+    const float   Steering   = FMath::Clamp(Lateral * FollowStrength, -1.f, 1.f);
+
+    SetThrottle(IdleThrottle);
+    SetSteering(Steering);
+    SetBrake(0.f);
 }
 
 void ARacingAIController::Execute_BlockingMirror()

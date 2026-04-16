@@ -14,6 +14,76 @@
 
 class UOwnedVehicle;
 
+// ---------------------------------------------------------------------------
+// Spawn condition
+// ---------------------------------------------------------------------------
+
+/**
+ * ESpawnConditionType
+ *
+ * What kind of condition must be met for this NPC to be eligible to spawn.
+ * Designed to be extensible — add new entries here and handle them in
+ * UCourseNPCSpawnManager::EvaluateCondition().
+ */
+UENUM(BlueprintType)
+enum class ESpawnConditionType : uint8
+{
+    /** Always eligible. Use this as a default/placeholder. */
+    Always          UMETA(DisplayName = "Always"),
+
+    /**
+     * Eligible only when the player's total currency is at or above a threshold.
+     * Use to gate wealthy/endgame rivals.
+     */
+    MinCurrency     UMETA(DisplayName = "Min Currency"),
+
+    /**
+     * Eligible only when the player has purchased at least N vehicles.
+     * Use to require some progression before a rival appears.
+     */
+    MinOwnedVehicles UMETA(DisplayName = "Min Owned Vehicles"),
+
+    /**
+     * Eligible only when a named story flag has been set on the game instance.
+     * Use for story-gated rivals (e.g. unlocked after beating a chapter boss).
+     */
+    StoryFlag        UMETA(DisplayName = "Story Flag Set"),
+};
+
+/**
+ * FNPCSpawnCondition
+ *
+ * A single eligibility condition for an NPC to appear on the course.
+ * All conditions in an NPC's SpawnConditions array must pass for the
+ * NPC to be included in the spawn pool.
+ */
+USTRUCT(BlueprintType)
+struct FNPCSpawnCondition
+{
+    GENERATED_BODY()
+
+    /** What kind of check to perform. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "SpawnCondition")
+    ESpawnConditionType ConditionType = ESpawnConditionType::Always;
+
+    /**
+     * Numeric threshold used by MinCurrency and MinOwnedVehicles.
+     * Ignored for Always and StoryFlag.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "SpawnCondition",
+        meta = (EditCondition = "ConditionType == ESpawnConditionType::MinCurrency || ConditionType == ESpawnConditionType::MinOwnedVehicles"))
+    int32 ThresholdValue = 0;
+
+    /**
+     * Story flag name used by the StoryFlag condition.
+     * Must match exactly what the story system sets on URacingGameInstance.
+     * Ignored for other condition types.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "SpawnCondition",
+        meta = (EditCondition = "ConditionType == ESpawnConditionType::StoryFlag"))
+    FName StoryFlagName;
+};
+
 /**
  * UNPCRacerData
  *
@@ -100,6 +170,35 @@ public:
      */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Perks")
     int32 BaseSkillSlots = 3;
+
+    // -----------------------------------------------------------------------
+    // Course Spawning
+    // -----------------------------------------------------------------------
+
+    /**
+     * Relative spawn weight for this NPC.
+     * Higher values make the NPC more likely to be picked during the
+     * weighted random selection in UCourseNPCSpawnManager.
+     * Default 1.0 = equal chance.  Use 0.1 for rare rivals, 3.0 for common.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Spawning",
+        meta = (ClampMin = "0.01"))
+    float SpawnWeight = 1.0f;
+
+    /**
+     * Name of the patrol spline this NPC should follow when idle.
+     * Must match a key in ACourseSplineActor's Splines map.
+     * Leave empty to assign any available spline.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Spawning")
+    FName PatrolSplineName;
+
+    /**
+     * All conditions in this array must pass for this NPC to be included
+     * in the spawn pool.  An empty array is equivalent to Always-eligible.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Spawning")
+    TArray<FNPCSpawnCondition> SpawnConditions;
 
     // -----------------------------------------------------------------------
     // Vehicle Configuration

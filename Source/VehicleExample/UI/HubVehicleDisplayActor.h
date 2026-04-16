@@ -12,6 +12,8 @@ class UTextureRenderTarget2D;
 class UVehicleDefinition;
 class USpotLightComponent;
 
+DECLARE_DELEGATE_OneParam(FOnRenderTargetReady, UTextureRenderTarget2D*);
+
 /**
  * AHubVehicleDisplayActor
  *
@@ -65,6 +67,12 @@ public:
     /** Returns the render target this actor writes to. Never null after BeginPlay. */
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "HubDisplay")
     UTextureRenderTarget2D* GetRenderTarget() const { return RenderTarget; }
+
+    /**
+     * Fired at the end of BeginPlay once the render target is created and valid.
+     * Bind before the actor's BeginPlay runs (i.e. bind immediately after spawning).
+     */
+    FOnRenderTargetReady OnRenderTargetReady;
 
     // -----------------------------------------------------------------------
     // Components (public for Blueprint subclassing if needed)

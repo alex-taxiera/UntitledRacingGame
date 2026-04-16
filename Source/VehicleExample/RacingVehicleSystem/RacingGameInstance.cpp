@@ -8,7 +8,8 @@
 #include "VehicleDefinition.h"
 
 const FName URacingGameInstance::GameLevelName  = TEXT("Hub");
-const FName URacingGameInstance::TitleLevelName = TEXT("TitleScreen");
+const FName URacingGameInstance::CourseLevelName = TEXT("CourseLevel");
+const FName URacingGameInstance::TitleLevelName  = TEXT("TitleScreen");
 const int32 URacingGameInstance::StartingCurrency = 10000000;
 
 URacingGameInstance::URacingGameInstance()
@@ -203,6 +204,12 @@ void URacingGameInstance::ContinueGame()
 {
     LoadGame();
     UGameplayStatics::OpenLevel(this, GameLevelName);
+}
+
+void URacingGameInstance::StartCourse()
+{
+    SaveGame();
+    UGameplayStatics::OpenLevel(this, CourseLevelName);
 }
 
 void URacingGameInstance::ReturnToTitle()

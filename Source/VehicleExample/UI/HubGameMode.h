@@ -7,6 +7,7 @@
 #include "HubGameMode.generated.h"
 
 class AHubVehicleDisplayActor;
+class AHubCameraActor;
 class SHubRootWidget;
 
 /**
@@ -46,9 +47,28 @@ private:
     UPROPERTY()
     TObjectPtr<AHubVehicleDisplayActor> DisplayActor;
 
+    /** Spawned at BeginPlay; becomes the player view target. */
+    UPROPERTY()
+    TObjectPtr<AHubCameraActor> HubCamera;
+
     /** The root Slate widget added to the viewport. */
     TSharedPtr<SHubRootWidget> HubWidget;
 
-    /** World-space location where the display actor is placed out of view. */
+    /**
+     * World-space location where the display actor is placed out of view.
+     * The display actor renders to a texture; it never appears in the camera.
+     */
     static const FVector DisplayActorLocation;
+
+    /**
+     * Spawn location for the hub camera.
+     * Pulled back on X, elevated on Z, facing origin.
+     * Override in a Blueprint subclass to reposition without recompiling.
+     */
+    UPROPERTY(EditDefaultsOnly, Category = "Hub|Camera")
+    FVector CameraSpawnLocation = FVector(-800.f, 0.f, 200.f);
+
+    /** Spawn rotation for the hub camera (pitch down slightly toward origin). */
+    UPROPERTY(EditDefaultsOnly, Category = "Hub|Camera")
+    FRotator CameraSpawnRotation = FRotator(-10.f, 0.f, 0.f);
 };

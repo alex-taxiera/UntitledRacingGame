@@ -21,6 +21,12 @@ enum class ERacingAIState : uint8
     Racing              UMETA(DisplayName = "Racing"),
 
     /**
+     * Patrol mode: follow the assigned patrol spline at low speed indefinitely.
+     * Active before a race starts.  Replaced by Racing when StartRace() is called.
+     */
+    Idle                UMETA(DisplayName = "Idle Patrol"),
+
+    /**
      * Mirrors the player's lateral offset on the road to deny the overtake line.
      * The NPC tracks the player's side-to-side position and copies it.
      */
@@ -322,6 +328,26 @@ USTRUCT(BlueprintType)
 struct FRacingAIConfig
 {
     GENERATED_BODY()
+
+    // -----------------------------------------------------------------------
+    // Idle Patrol
+    // -----------------------------------------------------------------------
+
+    /**
+     * Throttle fraction used during idle patrol (0-1).
+     * 0.35 gives a leisurely cruise; raise for more aggressive patrol pace.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Idle",
+        meta = (ClampMin = "0.0", ClampMax = "1.0"))
+    float IdleThrottle = 0.35f;
+
+    /**
+     * How strongly the NPC steers toward the patrol spline during idle (0-1).
+     * Lower values give smoother, lazier corrections.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Idle",
+        meta = (ClampMin = "0.0", ClampMax = "1.0"))
+    float IdleSplineFollowStrength = 0.65f;
 
     // -----------------------------------------------------------------------
     // Global Behaviour

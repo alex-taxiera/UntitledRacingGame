@@ -1,0 +1,148 @@
+// Copyright Epic Games, Inc. All Rights Reserved.
+
+#include "NPCPatrolActor.h"
+#include "RacingAIController.h"
+#include "RacingSplineComponent.h"
+#include "NPCRacerData.h"
+#include "VehicleExamplePawn.h"
+#include "Components/SphereComponent.h"
+#include "Engine/World.h"
+
+ANPCPatrolActor::ANPCPatrolActor()
+{
+    PrimaryActorTick.bCanEverTick = false;
+
+    ChallengeTrigger = CreateDefaultSubobject<USphereComponent>(TEXT("ChallengeTrigger"));
+    SetRootComponent(ChallengeTrigger);
+    ChallengeTrigger->SetSphereRadius(ChallengeRadius);
+    ChallengeTrigger->SetCollisionProfileName(TEXT("Trigger"));
+    ChallengeTrigger->OnComponentBeginOverlap.AddDynamic(
+        this, &ANPCPatrolActor::OnTriggerOverlapBegin);
+}
+
+void ANPCPatrolActor::BeginPlay()
+{
+    Super::BeginPlay();
+
+    // Sync sphere radius in case ChallengeRadius was changed in BP defaults
+    ChallengeTrigger->SetSphereRadius(ChallengeRadius);
+}
+
+void ANPCPatrolActor::EndPlay(const EEndPlayReason::Type Reason)
+{
+    if (NPCPawn)
+    {
+        NPCPawn->Destroy();
+        NPCPawn = nullptr;
+    }
+    Super::EndPlay(Reason);
+}
+
+// ---------------------------------------------------------------------------
+// Setup
+// ---------------------------------------------------------------------------
+
+void ANPCPatrolActor::Initialise(
+    UNPCRacerData*         InRacerData,
+    URacingSplineComponent* InPatrolSpline,
+    AVehicleExamplePawn*    InPlayerPawn)
+{
+    RacerData    = InRacerData;
+    PatrolSpline = InPatrolSpline;
+    PlayerPawn   = InPlayerPawn;
+    bInitialised = true;
+
+    SpawnNPCPawn();
+}
+
+void ANPCPatrolActor::SpawnNPCPawn()
+{
+    if (!RacerData) { return; }
+
+    // Resolve the pawn class from the vehicle definition
+    TSoftClassPtr<APawn> SoftClass;
+    if (RacerData->VehicleConfig.VehicleDefinition.IsValid())
+    {
+        UVehicleDefinition* Def = RacerData->VehicleConfig.VehicleDefinition.Get();
+        if (!Def) { Def = RacerData->VehicleConfig.VehicleDefinition.LoadSynchronous(); }
+        if (Def) { SoftClass = Def->PawnClass; }
+    }
+
+    UClass* PawnClass = SoftClass.IsValid()
+        ? SoftClass.LoadSynchronous()
+        : nullptr;
+
+    if (!PawnClass)
+    {
+        UE_LOG(LogTemp, Warning,
+            TEXT("ANPCPatrolActor: No PawnClass set on vehicle definition for NPC '%s'. Skipping spawn."),
+            RacerData ? *RacerData->RacerName.ToString() : TEXT("Unknown"));
+        return;
+    }
+
+    FActorSpawnParameters Params;
+    Params.SpawnCollisionHandlingOverride =
+        ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+    NPCPawn = GetWorld()->SpawnActor<AVehicleExamplePawn>(
+        PawnClass, GetActorTransform(), Params);
+
+    if (!NPCPawn) { return; }
+
+    // Spawn and possess with a RacingAIController
+    AIController = GetWorld()->SpawnActor<ARacingAIController>(
+        ARacingAIController::StaticClass());
+
+    if (!AIController) { return; }
+
+    // Configure the controller BEFORE Possess so OwnPawn is valid
+    // when StartIdle() is called.
+    AIController->SetRacerData(RacerData);
+    AIController->SetPatrolSpline(PatrolSpline);
+    AIController->SetRacingSpline(PatrolSpline);
+    if (PlayerPawn)
+    {
+        AIController->SetPlayerPawn(PlayerPawn);
+    }
+
+    AIController->Possess(NPCPawn);
+    AIController->StartIdle();
+}
+
+// ---------------------------------------------------------------------------
+// Race lifecycle
+// ---------------------------------------------------------------------------
+
+void ANPCPatrolActor::StartBattle()
+{
+    if (!AIController || bInBattle) { return; }
+    bInBattle = true;
+    AIController->StartRace();
+}
+
+void ANPCPatrolActor::EndBattle()
+{
+    if (!AIController) { return; }
+    bInBattle = false;
+    AIController->EndRace();
+    AIController->StartIdle();
+}
+
+// ---------------------------------------------------------------------------
+// Trigger
+// ---------------------------------------------------------------------------
+
+void ANPCPatrolActor::OnTriggerOverlapBegin(
+    UPrimitiveComponent* /*OverlappedComp*/,
+    AActor*              OtherActor,
+    UPrimitiveComponent* /*OtherComp*/,
+    int32                /*OtherBodyIndex*/,
+    bool                 /*bFromSweep*/,
+    const FHitResult&    /*SweepResult*/)
+{
+    // Only fire for the player pawn, and only when not already in a battle
+    if (bInBattle) { return; }
+    if (OtherActor != Cast<AActor>(PlayerPawn)) { return; }
+
+    OnChallenged.ExecuteIfBound(this);
+}

@@ -65,6 +65,9 @@ void AHubVehicleDisplayActor::BeginPlay()
 
     // Only capture this actor's mesh component
     CaptureComponent->ShowOnlyComponents.Add(MeshComponent);
+
+    // Notify listeners that the render target is ready
+    OnRenderTargetReady.ExecuteIfBound(RenderTarget);
 }
 
 void AHubVehicleDisplayActor::SetVehicle(UVehicleDefinition* Definition)

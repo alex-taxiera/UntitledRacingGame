@@ -2,6 +2,7 @@
 
 #include "HubGameMode.h"
 #include "HubVehicleDisplayActor.h"
+#include "HubCameraActor.h"
 #include "SHubRootWidget.h"
 #include "RacingGameInstance.h"
 #include "Engine/GameViewportClient.h"
@@ -29,12 +30,44 @@ void AHubGameMode::BeginPlay()
         FRotator::ZeroRotator,
         SpawnParams);
 
+    // Spawn the hub camera and set it as the view target
+    FActorSpawnParameters CamParams;
+    CamParams.Name = TEXT("HubCameraActor");
+    CamParams.SpawnCollisionHandlingOverride =
+        ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+    HubCamera = GetWorld()->SpawnActor<AHubCameraActor>(
+        AHubCameraActor::StaticClass(),
+        CameraSpawnLocation,
+        CameraSpawnRotation,
+        CamParams);
+
+    if (HubCamera)
+    {
+        HubCamera->ActivateForPlayer();
+    }
+
     // Build and add the Slate widget
+    // The render target isn't ready yet (BeginPlay runs after SpawnActor returns),
+    // so we bind to OnRenderTargetReady and update the widget brush then.
     URacingGameInstance* GI = URacingGameInstance::Get(this);
 
     HubWidget = SNew(SHubRootWidget)
         .GameInstance(GI)
         .DisplayActor(DisplayActor);
+
+    // Bind RT-ready callback — fires at end of DisplayActor::BeginPlay
+    if (DisplayActor)
+    {
+        DisplayActor->OnRenderTargetReady.BindLambda(
+            [this](UTextureRenderTarget2D* RT)
+            {
+                if (HubWidget.IsValid())
+                {
+                    HubWidget->NotifyRenderTargetReady(RT);
+                }
+            });
+    }
 
     if (GEngine && GEngine->GameViewport)
     {

@@ -406,10 +406,19 @@ void SDealershipPanel::RefreshPreviewBrush()
     if (RT)
     {
         PreviewBrush.SetResourceObject(RT);
-        PreviewBrush.ImageSize = FVector2D(512.f, 512.f);
+        PreviewBrush.ImageSize   = FVector2D(512.f, 512.f);
+        PreviewBrush.DrawAs      = ESlateBrushDrawType::Image;
+        PreviewBrush.Tiling      = ESlateBrushTileType::NoTile;
+        PreviewBrush.ImageType   = ESlateBrushImageType::FullColor;
     }
     else
     {
         PreviewBrush = FSlateBrush();
     }
+}
+
+void SDealershipPanel::SetRenderTarget(UTextureRenderTarget2D* RT)
+{
+    RenderTarget = RT;
+    RefreshPreviewBrush();
 }

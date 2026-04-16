@@ -46,10 +46,12 @@ public:
     void Construct(const FArguments& InArgs);
 
     /**
-     * Switches to the given panel.
-     * No-op for panels that are not yet implemented (Perks, Tuning, Collection).
-     * Ignored while the new-game dealership lock is active.
+     * Called by AHubGameMode once the render target is valid.
+     * Forwards the RT to both panels so their Slate brushes display correctly.
+     * Must be called after Construct.
      */
+    void NotifyRenderTargetReady(UTextureRenderTarget2D* RT);
+
     void ShowPanel(EHubPanel Panel);
 
 private:
@@ -72,6 +74,10 @@ private:
     TSharedPtr<SWidget> GarageSlot;
     TSharedPtr<SWidget> MenuOverlaySlot;
     TSharedPtr<SWidget> SystemOverlaySlot;
+
+    // Typed refs for RT notification
+    TSharedPtr<class SDealershipPanel> DealershipPanel;
+    TSharedPtr<class SGaragePanel>     GaragePanel;
 
     // -----------------------------------------------------------------------
     // Internal helpers

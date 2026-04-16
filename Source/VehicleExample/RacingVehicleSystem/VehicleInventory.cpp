@@ -42,6 +42,13 @@ UOwnedVehicle* UVehicleInventory::PurchaseVehicle(UVehicleDefinition* Definition
     OwnedVehicles.Add(NewVehicle);
 
     OnVehiclePurchased.Broadcast(NewVehicle);
+
+    // Auto-select the first vehicle purchased so CurrentVehicleID is always valid.
+    if (!CurrentVehicleID.IsValid())
+    {
+        SetCurrentVehicle(NewVehicle);
+    }
+
     return NewVehicle;
 }
 

@@ -55,6 +55,9 @@ public:
 
     void Construct(const FArguments& InArgs);
 
+    /** Re-binds the preview brush to a newly available render target. */
+    void SetRenderTarget(UTextureRenderTarget2D* RT);
+
 private:
 
     TWeakObjectPtr<URacingGameInstance>    GameInstance;

@@ -18,6 +18,7 @@
 #include "Widgets/Images/SImage.h"
 #include "Widgets/SBoxPanel.h"
 #include "Styling/CoreStyle.h"
+#include "Styling/SlateBrush.h"
 
 namespace GarageLayout
 {
@@ -464,10 +465,19 @@ void SGaragePanel::RefreshPreviewBrush()
     if (RT)
     {
         PreviewBrush.SetResourceObject(RT);
-        PreviewBrush.ImageSize = FVector2D(1024.f, 512.f);
+        PreviewBrush.ImageSize   = FVector2D(1024.f, 512.f);
+        PreviewBrush.DrawAs      = ESlateBrushDrawType::Image;
+        PreviewBrush.Tiling      = ESlateBrushTileType::NoTile;
+        PreviewBrush.ImageType   = ESlateBrushImageType::FullColor;
     }
     else
     {
         PreviewBrush = FSlateBrush();
     }
+}
+
+void SGaragePanel::SetRenderTarget(UTextureRenderTarget2D* RT)
+{
+    RenderTarget = RT;
+    RefreshPreviewBrush();
 }

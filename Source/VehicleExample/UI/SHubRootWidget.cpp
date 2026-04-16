@@ -67,9 +67,11 @@ void SHubRootWidget::Construct(const FArguments& InArgs)
         .GameInstance(GI)
         .OnClosed(this, &SHubRootWidget::CloseSystemMenu);
 
-    DealershipSlot   = Dealership;
-    GarageSlot       = Garage;
-    MenuOverlaySlot  = MenuOverlay;
+    DealershipPanel   = Dealership;
+    GaragePanel       = Garage;
+    DealershipSlot    = Dealership;
+    GarageSlot        = Garage;
+    MenuOverlaySlot   = MenuOverlay;
     SystemOverlaySlot = SystemOverlay;
 
     ChildSlot
@@ -102,6 +104,16 @@ void SHubRootWidget::Construct(const FArguments& InArgs)
     ];
 
     ApplyPanelVisibility();
+}
+
+// ---------------------------------------------------------------------------
+// Render target notification
+// ---------------------------------------------------------------------------
+
+void SHubRootWidget::NotifyRenderTargetReady(UTextureRenderTarget2D* RT)
+{
+    if (DealershipPanel.IsValid()) { DealershipPanel->SetRenderTarget(RT); }
+    if (GaragePanel.IsValid())     { GaragePanel->SetRenderTarget(RT); }
 }
 
 // ---------------------------------------------------------------------------
@@ -191,8 +203,7 @@ void SHubRootWidget::OnEnterRaceRequested()
     URacingGameInstance* GI = GameInstance.Get();
     if (GI)
     {
-        GI->SaveGame();
-        UGameplayStatics::OpenLevel(GI, TEXT("RaceLevel"));
+        GI->StartCourse();
     }
 }
 

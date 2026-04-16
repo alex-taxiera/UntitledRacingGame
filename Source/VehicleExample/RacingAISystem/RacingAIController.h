@@ -92,6 +92,28 @@ public:
     UFUNCTION(BlueprintCallable, Category = "RacingAI")
     void EndRace();
 
+    /**
+     * Puts the NPC into idle patrol mode.
+     * The NPC follows PatrolSpline (falls back to RacingSpline) at IdleThrottle.
+     * Does nothing if a race is already active.
+     */
+    UFUNCTION(BlueprintCallable, Category = "RacingAI")
+    void StartIdle();
+
+    /**
+     * Stops idle patrol without starting a race.
+     * Call before StartRace() when transitioning from patrol to battle.
+     */
+    UFUNCTION(BlueprintCallable, Category = "RacingAI")
+    void StopIdle();
+
+    /**
+     * Sets the spline used specifically for idle patrol.
+     * If null the controller falls back to RacingSpline for patrol too.
+     */
+    UFUNCTION(BlueprintCallable, Category = "RacingAI")
+    void SetPatrolSpline(URacingSplineComponent* InSpline);
+
     // -----------------------------------------------------------------------
     // State inspection (for debug / HUD)
     // -----------------------------------------------------------------------
@@ -128,6 +150,10 @@ private:
 
     UPROPERTY()
     TObjectPtr<URacingSplineComponent> RacingSpline;
+
+    /** Spline used during idle patrol. Falls back to RacingSpline if null. */
+    UPROPERTY()
+    TObjectPtr<URacingSplineComponent> PatrolSpline;
 
     UPROPERTY()
     TObjectPtr<AVehicleExamplePawn> PlayerPawn;
@@ -166,6 +192,7 @@ private:
     float TimeInCurrentState = 0.0f;
 
     bool bRaceActive = false;
+    bool bIdleActive = false;
 
     // -----------------------------------------------------------------------
     // Core state machine
@@ -197,6 +224,7 @@ private:
     // -----------------------------------------------------------------------
 
     void Execute_Racing();
+    void Execute_Idle();
     void Execute_BlockingMirror();
     void Execute_BlockingSlowDrift(const FAggressionBehaviorRule& Rule);
     void Execute_Bumping(const FAggressionBehaviorRule& Rule);
