@@ -12,6 +12,9 @@
 #include "ChaosWheeledVehicleMovementComponent.h"
 #include "VehicleExample.h"
 #include "TimerManager.h"
+#include "RacingVehicleSystem/RacingGameInstance.h"
+#include "RacingVehicleSystem/VehicleInventory.h"
+#include "RacingVehicleSystem/OwnedVehicle.h"
 
 #define LOCTEXT_NAMESPACE "VehiclePawn"
 
@@ -98,6 +101,25 @@ void AVehicleExamplePawn::BeginPlay()
 
 	// set up the flipped check timer
 	GetWorld()->GetTimerManager().SetTimer(FlipCheckTimer, this, &AVehicleExamplePawn::FlippedCheck, FlipCheckTime, true);
+
+	// Defer one tick so the PlayerController has possessed this pawn and the
+	// movement component is fully initialised before we apply data-asset stats.
+	GetWorldTimerManager().SetTimerForNextTick([this]()
+	{
+		// Only apply from the GameInstance for locally-controlled (player) pawns.
+		// NPC pawns are handled explicitly in NPCPatrolActor::SpawnNPCPawn().
+		if (!Cast<APlayerController>(GetController())) { return; }
+
+		URacingGameInstance* GI = URacingGameInstance::Get(this);
+		if (!GI) { return; }
+
+		UOwnedVehicle* CurrentVehicle = GI->GetVehicleInventory()
+			? GI->GetVehicleInventory()->GetCurrentVehicle()
+			: nullptr;
+		if (!CurrentVehicle) { return; }
+
+		ApplyVehicleStats(CurrentVehicle->ComputeEffectiveStats());
+	});
 }
 
 void AVehicleExamplePawn::EndPlay(EEndPlayReason::Type EndPlayReason)
@@ -193,7 +215,7 @@ void AVehicleExamplePawn::DoThrottle(float ThrottleValue)
 {
 	CurrentThrottleInput = ThrottleValue;
 	ChaosVehicleMovement->SetThrottleInput(ThrottleValue);
-	// Do NOT reset brake here — the axis fires every frame even at zero,
+	// Do NOT reset brake here ï¿½ the axis fires every frame even at zero,
 	// which would cancel any brake input applied the same frame.
 }
 
@@ -267,6 +289,69 @@ void AVehicleExamplePawn::DoResetVehicle()
 
 	GetMesh()->SetPhysicsAngularVelocityInDegrees(FVector::ZeroVector);
 	GetMesh()->SetPhysicsLinearVelocity(FVector::ZeroVector);
+}
+
+void AVehicleExamplePawn::ApplyVehicleStats(const FEffectiveVehicleStats& Stats)
+{
+	UChaosWheeledVehicleMovementComponent* MoveComp = ChaosVehicleMovement;
+	if (!MoveComp) { return; }
+
+	// --- Mass ---
+	if (Stats.MassKg > 0.f)
+	{
+		GetMesh()->SetMassOverrideInKg(NAME_None, Stats.MassKg, true);
+	}
+
+	// --- Engine ---
+	if (Stats.MaxRPM > 0.f || Stats.TorqueNm > 0.f)
+	{
+		FVehicleEngineConfig EngineCfg = MoveComp->EngineSetup;
+		if (Stats.MaxRPM > 0.f)   { EngineCfg.MaxRPM    = Stats.MaxRPM; }
+		if (Stats.TorqueNm > 0.f)  { EngineCfg.MaxTorque = Stats.TorqueNm; }
+		MoveComp->EngineSetup = EngineCfg;
+	}
+
+	// --- Transmission ---
+	{
+		FVehicleTransmissionConfig TransCfg = MoveComp->TransmissionSetup;
+		if (Stats.FinalDriveRatio > 0.f)
+		{
+			TransCfg.FinalRatio = Stats.FinalDriveRatio;
+		}
+		if (Stats.GearRatios.Num() > 0)
+		{
+			// Resize the gear array to match (preserving existing defaults for
+			// any gears the data asset doesn't specify).
+			TransCfg.ForwardGearRatios.SetNum(Stats.GearRatios.Num());
+			for (int32 i = 0; i < Stats.GearRatios.Num(); ++i)
+			{
+				TransCfg.ForwardGearRatios[i] = Stats.GearRatios[i];
+			}
+		}
+		MoveComp->TransmissionSetup = TransCfg;
+	}
+
+	// Reinitialise the Chaos vehicle simulation with the new setup values.
+	// This must be called after modifying EngineSetup / TransmissionSetup.
+	MoveComp->RecreatePhysicsState();
+
+	// --- Wheel friction (grip) ---
+	// Apply after RecreatePhysicsState so the Wheels array is fresh.
+	if (Stats.GripMultiplier > 0.f)
+	{
+		for (UChaosVehicleWheel* Wheel : MoveComp->Wheels)
+		{
+			if (Wheel)
+			{
+				Wheel->FrictionForceMultiplier = Stats.GripMultiplier;
+			}
+		}
+	}
+
+	UE_LOG(LogTemp, Log,
+		TEXT("ApplyVehicleStats: Mass=%.0fkg RPM=%.0f Torque=%.0fNm FinalDrive=%.3f Gears=%d Grip=%.2f"),
+		Stats.MassKg, Stats.MaxRPM, Stats.TorqueNm,
+		Stats.FinalDriveRatio, Stats.GearRatios.Num(), Stats.GripMultiplier);
 }
 
 void AVehicleExamplePawn::FlippedCheck()

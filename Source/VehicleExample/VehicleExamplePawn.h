@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "WheeledVehiclePawn.h"
+#include "RacingVehicleSystem/RacingVehicleTypes.h"
 #include "VehicleExamplePawn.generated.h"
 
 class UCameraComponent;
@@ -190,6 +191,17 @@ public:
 	/** Handle reset vehicle input by input actions or mobile interface */
 	UFUNCTION(BlueprintCallable, Category="Input")
 	void DoResetVehicle();
+
+	/**
+	 * Applies fully-resolved vehicle stats from a data asset to the Chaos physics
+	 * simulation.  Call once after the pawn is possessed and the movement component
+	 * is ready (i.e. from BeginPlay or a deferred next-tick).
+	 *
+	 * Sets: mass, engine MaxRPM & MaxTorque, transmission final drive ratio and
+	 * per-gear ratios, and per-wheel friction multiplier (grip).
+	 */
+	UFUNCTION(BlueprintCallable, Category="Vehicle")
+	void ApplyVehicleStats(const FEffectiveVehicleStats& Stats);
 
 protected:
 

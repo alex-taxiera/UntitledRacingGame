@@ -80,11 +80,11 @@ struct FPartStatModifiers
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Power")
     float MaxRPMMultiplier = 0.0f;
 
-    /** Reduction in braking distance, expressed as a positive fraction (0.0–1.0) */
+    /** Reduction in braking distance, expressed as a positive fraction (0.0ï¿½1.0) */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Chassis")
     float BrakingEfficiencyBonus = 0.0f;
 
-    /** Reduction in vehicle mass (kg) — positive value removes weight */
+    /** Reduction in vehicle mass (kg) ï¿½ positive value removes weight */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Chassis")
     float WeightReductionKg = 0.0f;
 
@@ -134,7 +134,7 @@ struct FPartLevelData
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Economy")
     int32 UnlockPointsRequired = 0;
 
-    /** Stat changes this level provides over stock (or over the previous level — designer's choice, just be consistent). */
+    /** Stat changes this level provides over stock (or over the previous level ï¿½ designer's choice, just be consistent). */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Stats")
     FPartStatModifiers StatModifiers;
 
@@ -232,7 +232,7 @@ struct FEngineDefinition
 
     /**
      * Optional torque curve asset reference (UCurveFloat).
-     * Evaluated at normalised RPM (0–1) to scale torque output.
+     * Evaluated at normalised RPM (0ï¿½1) to scale torque output.
      * Leave null to use a flat curve.
      */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Engine")
@@ -310,6 +310,10 @@ struct FEffectiveVehicleStats
 
     UPROPERTY(BlueprintReadOnly, Category = "Stats")
     float NitroForce = 0.0f;
+
+    /** Final drive (differential) ratio â€” copied from VehicleDefinition::BaseStats */
+    UPROPERTY(BlueprintReadOnly, Category = "Stats")
+    float FinalDriveRatio = 2.81f;
 
     /** Final per-gear ratios after player tuning */
     UPROPERTY(BlueprintReadOnly, Category = "Stats")
@@ -456,11 +460,11 @@ struct FLSDTuningDef
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "LSDType")
     ELSDType DefaultLSDType = ELSDType::OneWay;
 
-    /** Initial torque range (0–10). */
+    /** Initial torque range (0ï¿½10). */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "LSD")
     FTuningSpec InitialTorque = { 5.0f, 0.0f, 10.0f };
 
-    /** LSD ratio range (0–10). */
+    /** LSD ratio range (0ï¿½10). */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "LSD")
     FTuningSpec LSDRatio = { 5.0f, 0.0f, 10.0f };
 };
@@ -508,7 +512,7 @@ struct FSuspensionTuningDef
 /**
  * Designer-configured stabilizer (anti-roll bar) ranges.
  * Unlocked by the same Suspension part level gate as suspension tuning.
- * Uses the same MinSuspensionLevelForTuning field from FSuspensionTuningDef —
+ * Uses the same MinSuspensionLevelForTuning field from FSuspensionTuningDef ï¿½
  * the designer sets one threshold that covers both suspension and stabilizer.
  */
 USTRUCT(BlueprintType)
@@ -530,7 +534,7 @@ struct FStabilizerTuningDef
 
 /**
  * Front-to-rear torque split tuning for AWD vehicles.
- * FrontBias is a whole-number percentage (0–100); rear is implicit (100 - Front).
+ * FrontBias is a whole-number percentage (0ï¿½100); rear is implicit (100 - Front).
  * E.g. FrontBias = 50 means 50:50.  FrontBias = 30 means 30:70.
  */
 USTRUCT(BlueprintType)
@@ -538,7 +542,7 @@ struct FTorqueBalanceDef
 {
     GENERATED_BODY()
 
-    /** Default front torque percentage (0–100). */
+    /** Default front torque percentage (0ï¿½100). */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TorqueBalance",
         meta = (ClampMin = "0", ClampMax = "100"))
     int32 DefaultFrontBias = 50;
@@ -661,7 +665,7 @@ struct FStabilizerTuningState
 
 /**
  * Player-set torque balance for one AWD owned vehicle.
- * FrontBias is a whole-number percentage (0–100); rear is (100 - FrontBias).
+ * FrontBias is a whole-number percentage (0ï¿½100); rear is (100 - FrontBias).
  */
 USTRUCT(BlueprintType)
 struct FTorqueBalanceState

@@ -6,6 +6,7 @@
 #include "NPCRacerData.h"
 #include "VehicleExamplePawn.h"
 #include "Engine/World.h"
+#include "RacingVehicleSystem/OwnedVehicle.h"
 
 ANPCPatrolActor::ANPCPatrolActor()
 {
@@ -131,6 +132,14 @@ void ANPCPatrolActor::SpawnNPCPawn()
 
     AIController->Possess(NPCPawn);
     AIController->StartIdle();
+
+    // Apply data-asset vehicle stats (mass, RPM, torque, gear ratios, grip)
+    // so NPC physics match their configured definition.
+    UOwnedVehicle* NPCOwnedVehicle = RacerData->BuildOwnedVehicle(this);
+    if (NPCOwnedVehicle)
+    {
+        NPCPawn->ApplyVehicleStats(NPCOwnedVehicle->ComputeEffectiveStats());
+    }
 }
 
 // ---------------------------------------------------------------------------

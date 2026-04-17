@@ -116,6 +116,7 @@ FEffectiveVehicleStats UOwnedVehicle::ComputeEffectiveStats() const
     Stats.BrakingEfficiency = 1.0f;
     Stats.NitroCapacity    = 0.0f;
     Stats.NitroForce       = 0.0f;
+    Stats.FinalDriveRatio  = Definition->BaseStats.FinalDriveRatio;
 
     // Accumulate modifiers from all installed parts
     for (const auto& Pair : InstalledPartLevels)
@@ -190,7 +191,7 @@ void UOwnedVehicle::RefreshGearCount()
 }
 
 // ---------------------------------------------------------------------------
-// Tuning — Reset
+// Tuning ï¿½ Reset
 // ---------------------------------------------------------------------------
 
 void UOwnedVehicle::ResetTuningToDefaults()
@@ -237,7 +238,7 @@ void UOwnedVehicle::ResetTuningToDefaults()
 }
 
 // ---------------------------------------------------------------------------
-// Tuning — Unlock checks
+// Tuning ï¿½ Unlock checks
 // ---------------------------------------------------------------------------
 
 bool UOwnedVehicle::IsAlignmentTuningUnlocked() const
@@ -288,7 +289,7 @@ bool UOwnedVehicle::IsTorqueBalanceTuningUnlocked() const
 }
 
 // ---------------------------------------------------------------------------
-// Tuning — Setters
+// Tuning ï¿½ Setters
 // ---------------------------------------------------------------------------
 
 bool UOwnedVehicle::SetCamberFront(float Value)
