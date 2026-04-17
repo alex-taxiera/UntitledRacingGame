@@ -13,18 +13,27 @@
 #include "RacingVehicleSystem/VehicleDefinition.h"
 #include "SChallengePromptWidget.h"
 #include "SInputDebugWidget.h"
+#include "SRaceHUDWidget.h"
+#include "SRaceResultWidget.h"
+#include "RacingCharacterSystem/NPCRacerData.h"
+#include "RacingCharacterSystem/PlayerPerkManager.h"
+#include "RacingCharacterSystem/CharacterPerkState.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "EngineUtils.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/PlayerStartPIE.h"
 #include "GameFramework/PlayerController.h"
 #include "ChaosWheeledVehicleMovementComponent.h"
 #include "DrawDebugHelpers.h"
+#include "RacingAIController.h"
 
 ACourseGameMode::ACourseGameMode()
 {
     // DefaultPawnClass starts null; InitGame sets it from the player's
     // selected vehicle before any player connects.
     DefaultPawnClass = nullptr;
+
+    PrimaryActorTick.bCanEverTick = true;
 }
 
 void ACourseGameMode::InitGame(const FString& MapName,
@@ -109,6 +118,10 @@ void ACourseGameMode::EndPlay(const EEndPlayReason::Type EndPlayReason)
         GEngine->GameViewport->RemoveViewportWidgetContent(InputDebugWidget.ToSharedRef());
     }
     InputDebugWidget.Reset();
+
+    HideRaceHUD();
+    HideRaceResult();
+
     Super::EndPlay(EndPlayReason);
 }
 
@@ -171,8 +184,9 @@ void ACourseGameMode::SpawnNPCs()
 
         PatrolActor->Initialise(Entry.RacerData, Spline, PlayerPawn);
 
-        // Bind challenge delegate using a lambda that captures the game mode
+        // Bind challenge delegates
         PatrolActor->OnChallenged.BindUObject(this, &ACourseGameMode::OnNPCChallenged);
+        PatrolActor->OnChallengeLeft.BindUObject(this, &ACourseGameMode::OnNPCChallengeLeft);
 
         PatrolActors.Add(PatrolActor);
     }
@@ -196,6 +210,23 @@ void ACourseGameMode::OnNPCChallenged(ANPCPatrolActor* Challenger)
     ShowChallengePrompt(Challenger);
 }
 
+void ACourseGameMode::OnNPCChallengeLeft(ANPCPatrolActor* Challenger)
+{
+    // Only dismiss if this is the NPC whose prompt is currently showing
+    if (Challenger != PendingChallenge) { return; }
+
+    HideChallengePrompt();
+    PendingChallenge = nullptr;
+
+    // Restore game-only input (cursor was shown when prompt appeared)
+    APlayerController* PC = GetWorld()->GetFirstPlayerController();
+    if (PC)
+    {
+        PC->bShowMouseCursor = false;
+        PC->SetInputMode(FInputModeGameOnly());
+    }
+}
+
 void ACourseGameMode::OnChallengeResponse(bool bAccepted)
 {
     HideChallengePrompt();
@@ -207,13 +238,40 @@ void ACourseGameMode::OnChallengeResponse(bool bAccepted)
         ActiveBattleNPC = PendingChallenge;
         ActiveBattleNPC->StartBattle();
 
-        // Restore game input (player is now racing)
-        APlayerController* PC = GetWorld()->GetFirstPlayerController();
-        if (PC)
+        // Initialise health and show race HUD
+        InitBattleHealth(ActiveBattleNPC);
+        ShowRaceHUD(ActiveBattleNPC);
+        BattleStartTime = GetWorld()->GetTimeSeconds();
+        bBattleActive   = true;
+
+        // Enable hit events and bind collision handlers on both pawns
+        AVehicleExamplePawn* PlayerPawn = GetPlayerVehiclePawn();
+        AVehicleExamplePawn* NPCPawn    = ActiveBattleNPC->GetNPCPawn();
+
+        if (PlayerPawn)
         {
-            PC->SetInputMode(FInputModeGameOnly());
-            PC->bShowMouseCursor = false;
+            if (USkeletalMeshComponent* Mesh = PlayerPawn->GetMesh())
+            {
+                Mesh->SetNotifyRigidBodyCollision(true);
+            }
+            PlayerPawn->OnActorHit.AddDynamic(this, &ACourseGameMode::OnPlayerPawnHit);
         }
+        if (NPCPawn)
+        {
+            if (USkeletalMeshComponent* Mesh = NPCPawn->GetMesh())
+            {
+                Mesh->SetNotifyRigidBodyCollision(true);
+            }
+            NPCPawn->OnActorHit.AddDynamic(this, &ACourseGameMode::OnNPCPawnHit);
+        }
+    }
+
+    // Always restore game-only input when prompt is dismissed
+    APlayerController* PC = GetWorld()->GetFirstPlayerController();
+    if (PC)
+    {
+        PC->SetInputMode(FInputModeGameOnly());
+        PC->bShowMouseCursor = false;
     }
 
     PendingChallenge = nullptr;
@@ -221,12 +279,36 @@ void ACourseGameMode::OnChallengeResponse(bool bAccepted)
 
 void ACourseGameMode::OnBattleEnded()
 {
+    bBattleActive = false;
+
+    // Unbind collision handlers and disable hit events
+    AVehicleExamplePawn* PlayerPawn = GetPlayerVehiclePawn();
+    if (PlayerPawn)
+    {
+        PlayerPawn->OnActorHit.RemoveDynamic(this, &ACourseGameMode::OnPlayerPawnHit);
+        if (USkeletalMeshComponent* Mesh = PlayerPawn->GetMesh())
+        {
+            Mesh->SetNotifyRigidBodyCollision(false);
+        }
+    }
+
     if (ActiveBattleNPC)
     {
+        AVehicleExamplePawn* NPCPawn = ActiveBattleNPC->GetNPCPawn();
+        if (NPCPawn)
+        {
+            NPCPawn->OnActorHit.RemoveDynamic(this, &ACourseGameMode::OnNPCPawnHit);
+            if (USkeletalMeshComponent* Mesh = NPCPawn->GetMesh())
+            {
+                Mesh->SetNotifyRigidBodyCollision(false);
+            }
+        }
         ActiveBattleNPC->EndBattle();
         ActiveBattleNPC = nullptr;
     }
 
+    HideRaceHUD();
+    HideRaceResult();
     HideChallengePrompt();
 }
 
@@ -263,6 +345,305 @@ void ACourseGameMode::HideChallengePrompt()
             ChallengeWidget.ToSharedRef());
     }
     ChallengeWidget.Reset();
+}
+
+// ---------------------------------------------------------------------------
+// Battle health initialisation
+// ---------------------------------------------------------------------------
+
+void ACourseGameMode::InitBattleHealth(ANPCPatrolActor* NPC)
+{
+    // NPC max HP from their data asset base stats
+    UNPCRacerData* RacerData = NPC ? NPC->GetRacerData() : nullptr;
+    NPCMaxHP     = RacerData ? FMath::Max(1.f, static_cast<float>(RacerData->BaseStats.Health)) : 100.f;
+    NPCCurrentHP = NPCMaxHP;
+
+    // Player max HP: base 100 + Health perk contributions
+    PlayerMaxHP = static_cast<float>(ComputePlayerStats().Health);
+    if (PlayerMaxHP <= 0.f) { PlayerMaxHP = 100.f; }
+    PlayerCurrentHP = PlayerMaxHP;
+}
+
+FDriverStatBlock ACourseGameMode::ComputePlayerStats() const
+{
+    FDriverStatBlock Base;
+    Base.Health = 100;
+
+    URacingGameInstance* GI = URacingGameInstance::Get(this);
+    if (!GI || !GI->GetPerkManager() || !GI->GetPerkManager()->PerkState)
+    {
+        return Base;
+    }
+
+    TArray<UPerkData*> AllPerks;
+    for (const TObjectPtr<UPerkData>& P : GI->GetPerkManager()->AllPerks)
+    {
+        if (P) { AllPerks.Add(P.Get()); }
+    }
+
+    return GI->GetPerkManager()->PerkState->ComputeStats(AllPerks, Base);
+}
+
+// ---------------------------------------------------------------------------
+// Race HUD widget
+// ---------------------------------------------------------------------------
+
+void ACourseGameMode::ShowRaceHUD(ANPCPatrolActor* NPC)
+{
+    if (!GEngine || !GEngine->GameViewport) { return; }
+    HideRaceHUD();
+
+    const FText PlayerName = NSLOCTEXT("RaceHUD", "PlayerLabel", "PLAYER");
+    const FText NPCName    = NPC && NPC->GetRacerData()
+        ? NPC->GetRacerData()->RacerName
+        : NSLOCTEXT("RaceHUD", "NPCFallback", "OPPONENT");
+
+    // Capture raw pointers for attribute lambdas (game mode outlives the widget)
+    ACourseGameMode* GM = this;
+
+    RaceHUDWidget = SNew(SRaceHUDWidget)
+        .PlayerName(PlayerName)
+        .NPCName(NPCName)
+        .PlayerHealthFraction_Lambda([GM]() -> float
+        {
+            return GM->PlayerMaxHP > 0.f
+                ? FMath::Clamp(GM->PlayerCurrentHP / GM->PlayerMaxHP, 0.f, 1.f)
+                : 0.f;
+        })
+        .NPCHealthFraction_Lambda([GM]() -> float
+        {
+            return GM->NPCMaxHP > 0.f
+                ? FMath::Clamp(GM->NPCCurrentHP / GM->NPCMaxHP, 0.f, 1.f)
+                : 0.f;
+        })
+        .TimerText_Lambda([GM]() -> FText
+        {
+            if (!GM->bBattleActive) { return FText::FromString(TEXT("0:00")); }
+            const float  Elapsed  = GM->GetWorld()->GetTimeSeconds() - GM->BattleStartTime;
+            const int32  TotalSec = FMath::FloorToInt(Elapsed);
+            const int32  Min      = TotalSec / 60;
+            const int32  Sec      = TotalSec % 60;
+            return FText::FromString(FString::Printf(TEXT("%d:%02d"), Min, Sec));
+        });
+
+    GEngine->GameViewport->AddViewportWidgetContent(
+        RaceHUDWidget.ToSharedRef(), /*ZOrder=*/10);
+}
+
+void ACourseGameMode::HideRaceHUD()
+{
+    if (RaceHUDWidget.IsValid() && GEngine && GEngine->GameViewport)
+    {
+        GEngine->GameViewport->RemoveViewportWidgetContent(RaceHUDWidget.ToSharedRef());
+    }
+    RaceHUDWidget.Reset();
+}
+
+// ---------------------------------------------------------------------------
+// Race result popup
+// ---------------------------------------------------------------------------
+
+void ACourseGameMode::ShowRaceResult(bool bPlayerWon)
+{
+    if (!GEngine || !GEngine->GameViewport) { return; }
+    HideRaceResult();
+    HideRaceHUD();
+
+    const float Elapsed = GetWorld()->GetTimeSeconds() - BattleStartTime;
+
+    RaceResultWidget = SNew(SRaceResultWidget)
+        .bPlayerWon(bPlayerWon)
+        .ElapsedSeconds(Elapsed)
+        .OnContinue(FOnRaceResultContinue::CreateUObject(
+            this, &ACourseGameMode::OnBattleEnded));
+
+    GEngine->GameViewport->AddViewportWidgetContent(
+        RaceResultWidget.ToSharedRef(), /*ZOrder=*/30);
+
+    // Show cursor so the player can click CONTINUE
+    APlayerController* PC = GetWorld()->GetFirstPlayerController();
+    if (PC)
+    {
+        PC->bShowMouseCursor = true;
+        PC->SetInputMode(FInputModeGameAndUI());
+    }
+}
+
+void ACourseGameMode::HideRaceResult()
+{
+    if (RaceResultWidget.IsValid() && GEngine && GEngine->GameViewport)
+    {
+        GEngine->GameViewport->RemoveViewportWidgetContent(RaceResultWidget.ToSharedRef());
+    }
+    RaceResultWidget.Reset();
+}
+
+// ---------------------------------------------------------------------------
+// Tick — distance-based HP drain
+// ---------------------------------------------------------------------------
+
+void ACourseGameMode::Tick(float DeltaSeconds)
+{
+    Super::Tick(DeltaSeconds);
+
+    // Keybind: F (keyboard) or Gamepad A to accept a pending challenge prompt
+    if (PendingChallenge)
+    {
+        APlayerController* PC = GetWorld()->GetFirstPlayerController();
+        if (PC && (PC->WasInputKeyJustPressed(EKeys::F) ||
+                   PC->WasInputKeyJustPressed(EKeys::Gamepad_FaceButton_Bottom)))
+        {
+            OnChallengeResponse(true);
+            return; // don't also run the distance drain this frame
+        }
+    }
+
+    if (!bBattleActive || !ActiveBattleNPC) { return; }
+
+    ARacingAIController* AIC = ActiveBattleNPC->GetAIController();
+    if (!AIC) { return; }
+
+    // DistanceToPlayerCm = PlayerSplineDist - NPCSplineDist
+    // Positive  → player is ahead of NPC
+    // Negative  → player is behind NPC
+    const float SignedGap = AIC->GetContext().DistanceToPlayerCm;
+
+    if (SignedGap < -DistanceDrainThresholdCm)
+    {
+        // Player is more than 26 yards behind — drain player HP
+        PlayerCurrentHP = FMath::Max(0.f,
+            PlayerCurrentHP - DistanceDrainRatePerSecond * DeltaSeconds);
+
+        if (PlayerCurrentHP <= 0.f)
+        {
+            TriggerBattleEnd(/*bPlayerWon=*/false);
+        }
+    }
+    else if (SignedGap > DistanceDrainThresholdCm)
+    {
+        // NPC is more than 26 yards behind — drain NPC HP
+        NPCCurrentHP = FMath::Max(0.f,
+            NPCCurrentHP - DistanceDrainRatePerSecond * DeltaSeconds);
+
+        if (NPCCurrentHP <= 0.f)
+        {
+            TriggerBattleEnd(/*bPlayerWon=*/true);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Battle end trigger (called when HP reaches 0)
+// ---------------------------------------------------------------------------
+
+void ACourseGameMode::TriggerBattleEnd(bool bPlayerWon)
+{
+    if (!bBattleActive) { return; }
+    bBattleActive = false;
+
+    // Unbind hit events immediately so no more damage is dealt
+    AVehicleExamplePawn* PlayerPawn = GetPlayerVehiclePawn();
+    if (PlayerPawn)
+    {
+        PlayerPawn->OnActorHit.RemoveDynamic(this, &ACourseGameMode::OnPlayerPawnHit);
+    }
+    if (ActiveBattleNPC)
+    {
+        AVehicleExamplePawn* NPCPawn = ActiveBattleNPC->GetNPCPawn();
+        if (NPCPawn)
+        {
+            NPCPawn->OnActorHit.RemoveDynamic(this, &ACourseGameMode::OnNPCPawnHit);
+        }
+    }
+
+    ShowRaceResult(bPlayerWon);
+}
+
+// ---------------------------------------------------------------------------
+// Collision damage handlers
+// ---------------------------------------------------------------------------
+
+void ACourseGameMode::OnPlayerPawnHit(AActor*          SelfActor,
+                                       AActor*          OtherActor,
+                                       FVector          NormalImpulse,
+                                       const FHitResult& Hit)
+{
+    if (!bBattleActive || !ActiveBattleNPC) { return; }
+
+    const float ImpulseMag = NormalImpulse.Size();
+    float Damage = 0.f;
+
+    if (OtherActor == Cast<AActor>(ActiveBattleNPC->GetNPCPawn()))
+    {
+        // Vehicle-to-vehicle collision: player takes damage
+        Damage = FMath::Max(MinCollisionDamage, ImpulseMag / CollisionDamageScale);
+        UE_LOG(LogTemp, Verbose,
+            TEXT("RaceHUD: Player hit by NPC (impulse=%.0f) — HP %.1f / %.1f"),
+            ImpulseMag, PlayerCurrentHP, PlayerMaxHP);
+    }
+    else if (Cast<APawn>(OtherActor) == nullptr
+             && ImpulseMag >= MinWallImpulse
+             && Hit.ImpactNormal.Z < 0.7f)
+    {
+        // Wall/barrier collision: player takes damage (capped to avoid one-shots)
+        Damage = FMath::Clamp(ImpulseMag / WallCollisionDamageScale,
+                              MinCollisionDamage, MaxWallDamagePerHit);
+        UE_LOG(LogTemp, Verbose,
+            TEXT("RaceHUD: Player hit wall (impulse=%.0f) — HP %.1f / %.1f"),
+            ImpulseMag, PlayerCurrentHP, PlayerMaxHP);
+    }
+    else
+    {
+        return; // Road surface or irrelevant contact
+    }
+
+    PlayerCurrentHP = FMath::Max(0.f, PlayerCurrentHP - Damage);
+    if (PlayerCurrentHP <= 0.f)
+    {
+        TriggerBattleEnd(/*bPlayerWon=*/false);
+    }
+}
+
+void ACourseGameMode::OnNPCPawnHit(AActor*          SelfActor,
+                                    AActor*          OtherActor,
+                                    FVector          NormalImpulse,
+                                    const FHitResult& Hit)
+{
+    if (!bBattleActive) { return; }
+
+    AVehicleExamplePawn* PlayerPawn = GetPlayerVehiclePawn();
+    const float ImpulseMag = NormalImpulse.Size();
+    float Damage = 0.f;
+
+    if (OtherActor == Cast<AActor>(PlayerPawn))
+    {
+        // Vehicle-to-vehicle collision: NPC takes damage
+        Damage = FMath::Max(MinCollisionDamage, ImpulseMag / CollisionDamageScale);
+        UE_LOG(LogTemp, Verbose,
+            TEXT("RaceHUD: NPC hit by Player (impulse=%.0f) — HP %.1f / %.1f"),
+            ImpulseMag, NPCCurrentHP, NPCMaxHP);
+    }
+    else if (Cast<APawn>(OtherActor) == nullptr
+             && ImpulseMag >= MinWallImpulse
+             && Hit.ImpactNormal.Z < 0.7f)
+    {
+        // Wall/barrier collision: NPC takes damage (capped to avoid one-shots)
+        Damage = FMath::Clamp(ImpulseMag / WallCollisionDamageScale,
+                              MinCollisionDamage, MaxWallDamagePerHit);
+        UE_LOG(LogTemp, Verbose,
+            TEXT("RaceHUD: NPC hit wall (impulse=%.0f) — HP %.1f / %.1f"),
+            ImpulseMag, NPCCurrentHP, NPCMaxHP);
+    }
+    else
+    {
+        return; // Road surface or irrelevant contact
+    }
+
+    NPCCurrentHP = FMath::Max(0.f, NPCCurrentHP - Damage);
+    if (NPCCurrentHP <= 0.f)
+    {
+        TriggerBattleEnd(/*bPlayerWon=*/true);
+    }
 }
 
 // ---------------------------------------------------------------------------

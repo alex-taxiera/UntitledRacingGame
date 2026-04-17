@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework\GameModeBase.h"
 #include "CourseNPCSpawnManager.h"
+#include "RacingCharacterSystem/PerkTypes.h"
 #include "CourseGameMode.generated.h"
 
 class ACourseSplineActor;
@@ -12,6 +13,8 @@ class ANPCPatrolActor;
 class AVehicleExamplePawn;
 class SChallengePromptWidget;
 class SInputDebugWidget;
+class SRaceHUDWidget;
+class SRaceResultWidget;
 class UNPCRacerData;
 
 /**
@@ -45,6 +48,7 @@ public:
 
     virtual void InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage) override;
     virtual void BeginPlay() override;
+    virtual void Tick(float DeltaSeconds) override;
     virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
     UFUNCTION(BlueprintCallable, Category = "Course")
@@ -85,12 +89,92 @@ private:
 
     TSharedPtr<SChallengePromptWidget> ChallengeWidget;
     TSharedPtr<SInputDebugWidget>      InputDebugWidget;
+    TSharedPtr<SRaceHUDWidget>         RaceHUDWidget;
+    TSharedPtr<SRaceResultWidget>      RaceResultWidget;
     FTimerHandle DiagnosticTimerHandle;
+
+    // -----------------------------------------------------------------------
+    // Battle health & damage
+    // -----------------------------------------------------------------------
+
+    float PlayerCurrentHP  = 0.f;
+    float PlayerMaxHP      = 100.f;
+    float NPCCurrentHP     = 0.f;
+    float NPCMaxHP         = 100.f;
+    float BattleStartTime  = 0.f;
+    bool  bBattleActive    = false;
+
+    /**
+     * Impulse magnitude (cm/s * kg) divided by this gives HP damage per hit.
+     * Tune in the Blueprint subclass to adjust combat feel.
+     */
+    UPROPERTY(EditAnywhere, Category = "Course|Battle")
+    float CollisionDamageScale = 4000.f;
+
+    /** Minimum HP deducted from any valid vehicle-on-vehicle collision. */
+    UPROPERTY(EditAnywhere, Category = "Course|Battle")
+    float MinCollisionDamage = 2.f;
+
+    /**
+     * Impulse magnitude threshold (cm/s * kg) below which a non-pawn hit is
+     * ignored — prevents road-surface micro-contacts from dealing wall damage.
+     */
+    UPROPERTY(EditAnywhere, Category = "Course|Battle")
+    float MinWallImpulse = 50000.f;
+
+    /**
+     * Impulse divisor used when a racer hits a wall or barrier.
+     * Separate from CollisionDamageScale so wall hits can feel distinct.
+     */
+    UPROPERTY(EditAnywhere, Category = "Course|Battle")
+    float WallCollisionDamageScale = 6000.f;
+
+    /**
+     * Maximum HP a single wall collision can remove from a racer.
+     * Prevents very high-speed impacts from dealing instant lethal damage.
+     */
+    UPROPERTY(EditAnywhere, Category = "Course|Battle", meta = (ClampMin = "1.0"))
+    float MaxWallDamagePerHit = 15.f;
+
+    /**
+     * Distance (in cm) the player must be behind the opponent before
+     * HP drain kicks in. 2377.44 cm ≈ 26 yards.
+     */
+    UPROPERTY(EditAnywhere, Category = "Course|Battle", meta = (ClampMin = "1.0"))
+    float DistanceDrainThresholdCm = 2377.44f;
+
+    /**
+     * HP lost per second while a racer is beyond DistanceDrainThresholdCm behind
+     * their opponent.
+     */
+    UPROPERTY(EditAnywhere, Category = "Course|Battle", meta = (ClampMin = "0.0"))
+    float DistanceDrainRatePerSecond = 5.f;
+
+    void InitBattleHealth(ANPCPatrolActor* NPC);
+    void ShowRaceHUD(ANPCPatrolActor* NPC);
+    void HideRaceHUD();
+    void ShowRaceResult(bool bPlayerWon);
+    void HideRaceResult();
+    void TriggerBattleEnd(bool bPlayerWon);
+
+    /** Computes the player's resolved FDriverStatBlock from their perk state. */
+    FDriverStatBlock ComputePlayerStats() const;
+
+    UFUNCTION()
+    void OnPlayerPawnHit(AActor* SelfActor, AActor* OtherActor,
+                         FVector NormalImpulse, const FHitResult& Hit);
+
+    UFUNCTION()
+    void OnNPCPawnHit(AActor* SelfActor, AActor* OtherActor,
+                      FVector NormalImpulse, const FHitResult& Hit);
 
     void SpawnNPCs();
 
     /** Bound to every ANPCPatrolActor::OnChallenged delegate. */
     void OnNPCChallenged(ANPCPatrolActor* Challenger);
+
+    /** Bound to every ANPCPatrolActor::OnChallengeLeft delegate — dismisses the prompt if pending. */
+    void OnNPCChallengeLeft(ANPCPatrolActor* Challenger);
 
     /** Bound to SChallengePromptWidget::OnResponse. */
     void OnChallengeResponse(bool bAccepted);

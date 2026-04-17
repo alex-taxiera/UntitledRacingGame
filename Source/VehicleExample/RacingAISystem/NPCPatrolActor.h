@@ -6,7 +6,6 @@
 #include "GameFramework/Actor.h"
 #include "NPCPatrolActor.generated.h"
 
-class USphereComponent;
 class URacingSplineComponent;
 class UNPCRacerData;
 class ARacingAIController;
@@ -41,6 +40,7 @@ public:
     ANPCPatrolActor();
 
     virtual void BeginPlay() override;
+    virtual void Tick(float DeltaSeconds) override;
     virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 
     // -----------------------------------------------------------------------
@@ -90,16 +90,20 @@ public:
 
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "NPC")
     bool IsInBattle() const { return bInBattle; }
-
-    /** Logs AI controller internal state — call from diagnostics only. */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "NPC")
+    ARacingAIController* GetAIController() const { return AIController; }
+    /** Logs AI controller internal state ï¿½ call from diagnostics only. */
     void LogAIDiagnostics() const;
 
     // -----------------------------------------------------------------------
-    // Delegate — bind in ACourseGameMode
+    // Delegate ï¿½ bind in ACourseGameMode
     // -----------------------------------------------------------------------
 
     /** Fired when the player enters the challenge trigger radius. */
     FOnNPCChallenged OnChallenged;
+
+    /** Fired when the player exits the challenge trigger radius while the prompt is pending. */
+    FOnNPCChallenged OnChallengeLeft;
 
     // -----------------------------------------------------------------------
     // Configurable properties
@@ -130,21 +134,10 @@ private:
     UPROPERTY()
     TObjectPtr<ARacingAIController> AIController;
 
-    UPROPERTY()
-    TObjectPtr<USphereComponent> ChallengeTrigger;
-
-    bool bInitialised = false;
-    bool bInBattle    = false;
+    bool bInitialised   = false;
+    bool bInBattle      = false;
+    bool bPlayerInRange = false;
 
     /** Spawns the vehicle pawn at this actor's location and possesses it. */
     void SpawnNPCPawn();
-
-    UFUNCTION()
-    void OnTriggerOverlapBegin(
-        UPrimitiveComponent* OverlappedComp,
-        AActor*              OtherActor,
-        UPrimitiveComponent* OtherComp,
-        int32                OtherBodyIndex,
-        bool                 bFromSweep,
-        const FHitResult&    SweepResult);
 };

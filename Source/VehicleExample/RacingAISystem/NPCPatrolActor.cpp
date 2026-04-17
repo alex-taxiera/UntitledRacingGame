@@ -5,27 +5,20 @@
 #include "RacingSplineComponent.h"
 #include "NPCRacerData.h"
 #include "VehicleExamplePawn.h"
-#include "Components/SphereComponent.h"
 #include "Engine/World.h"
 
 ANPCPatrolActor::ANPCPatrolActor()
 {
-    PrimaryActorTick.bCanEverTick = false;
+    PrimaryActorTick.bCanEverTick = true;
 
-    ChallengeTrigger = CreateDefaultSubobject<USphereComponent>(TEXT("ChallengeTrigger"));
-    SetRootComponent(ChallengeTrigger);
-    ChallengeTrigger->SetSphereRadius(ChallengeRadius);
-    ChallengeTrigger->SetCollisionProfileName(TEXT("Trigger"));
-    ChallengeTrigger->OnComponentBeginOverlap.AddDynamic(
-        this, &ANPCPatrolActor::OnTriggerOverlapBegin);
+    // Plain scene component as root — the challenge trigger is now distance-based in Tick.
+    USceneComponent* Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
+    SetRootComponent(Root);
 }
 
 void ANPCPatrolActor::BeginPlay()
 {
     Super::BeginPlay();
-
-    // Sync sphere radius in case ChallengeRadius was changed in BP defaults
-    ChallengeTrigger->SetSphereRadius(ChallengeRadius);
 }
 
 void ANPCPatrolActor::EndPlay(const EEndPlayReason::Type Reason)
@@ -36,6 +29,32 @@ void ANPCPatrolActor::EndPlay(const EEndPlayReason::Type Reason)
         NPCPawn = nullptr;
     }
     Super::EndPlay(Reason);
+}
+
+// ---------------------------------------------------------------------------
+// Tick — distance-based challenge trigger
+// ---------------------------------------------------------------------------
+
+void ANPCPatrolActor::Tick(float DeltaSeconds)
+{
+    Super::Tick(DeltaSeconds);
+
+    if (bInBattle || !PlayerPawn || !NPCPawn) { return; }
+
+    const float DistSq    = FVector::DistSquared(PlayerPawn->GetActorLocation(),
+                                                  NPCPawn->GetActorLocation());
+    const float ThreshSq  = ChallengeRadius * ChallengeRadius;
+
+    if (!bPlayerInRange && DistSq <= ThreshSq)
+    {
+        bPlayerInRange = true;
+        OnChallenged.ExecuteIfBound(this);
+    }
+    else if (bPlayerInRange && DistSq > ThreshSq)
+    {
+        bPlayerInRange = false;
+        OnChallengeLeft.ExecuteIfBound(this);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -121,14 +140,16 @@ void ANPCPatrolActor::SpawnNPCPawn()
 void ANPCPatrolActor::StartBattle()
 {
     if (!AIController || bInBattle) { return; }
-    bInBattle = true;
+    bInBattle      = true;
+    bPlayerInRange = false;  // reset so re-approach after battle works cleanly
     AIController->StartRace();
 }
 
 void ANPCPatrolActor::EndBattle()
 {
     if (!AIController) { return; }
-    bInBattle = false;
+    bInBattle      = false;
+    bPlayerInRange = false;  // prevent spurious re-challenge if player is still nearby
     AIController->EndRace();
     AIController->StartIdle();
 }
@@ -152,20 +173,4 @@ void ANPCPatrolActor::LogAIDiagnostics() const
 }
 
 // ---------------------------------------------------------------------------
-// Trigger
-// ---------------------------------------------------------------------------
-
-void ANPCPatrolActor::OnTriggerOverlapBegin(
-    UPrimitiveComponent* /*OverlappedComp*/,
-    AActor*              OtherActor,
-    UPrimitiveComponent* /*OtherComp*/,
-    int32                /*OtherBodyIndex*/,
-    bool                 /*bFromSweep*/,
-    const FHitResult&    /*SweepResult*/)
-{
-    // Only fire for the player pawn, and only when not already in a battle
-    if (bInBattle) { return; }
-    if (OtherActor != Cast<AActor>(PlayerPawn)) { return; }
-
-    OnChallenged.ExecuteIfBound(this);
-}
+// Diagnostics
