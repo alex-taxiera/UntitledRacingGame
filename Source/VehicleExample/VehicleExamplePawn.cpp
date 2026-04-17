@@ -185,26 +185,23 @@ void AVehicleExamplePawn::ResetVehicle(const FInputActionValue& Value)
 
 void AVehicleExamplePawn::DoSteering(float SteeringValue)
 {
-	// add the input
+	CurrentSteeringInput = SteeringValue;
 	ChaosVehicleMovement->SetSteeringInput(SteeringValue);
 }
 
 void AVehicleExamplePawn::DoThrottle(float ThrottleValue)
 {
-	// add the input
+	CurrentThrottleInput = ThrottleValue;
 	ChaosVehicleMovement->SetThrottleInput(ThrottleValue);
-
-	// reset the brake input
-	ChaosVehicleMovement->SetBrakeInput(0.0f);
+	// Do NOT reset brake here — the axis fires every frame even at zero,
+	// which would cancel any brake input applied the same frame.
 }
 
 void AVehicleExamplePawn::DoBrake(float BrakeValue)
 {
-	// add the input
+	CurrentBrakeInput = BrakeValue;
 	ChaosVehicleMovement->SetBrakeInput(BrakeValue);
-
-	// reset the throttle input
-	ChaosVehicleMovement->SetThrottleInput(0.0f);
+	// Do NOT reset throttle here for the same reason.
 }
 
 void AVehicleExamplePawn::DoBrakeStart()

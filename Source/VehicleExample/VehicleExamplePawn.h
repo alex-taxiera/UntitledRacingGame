@@ -79,6 +79,10 @@ protected:
 	/** Keeps track of whether the car is flipped. If this is true for two flip checks, resets the vehicle automatically */
 	bool bPreviousFlipCheck = false;
 
+	float CurrentThrottleInput = 0.f;
+	float CurrentBrakeInput    = 0.f;
+	float CurrentSteeringInput = 0.f;
+
 	/** Time between automatic flip checks */
 	UPROPERTY(EditAnywhere, Category="Flip Check", meta = (Units = "s"))
 	float FlipCheckTime = 3.0f;
@@ -153,6 +157,11 @@ public:
 	/** Handle brake input by input actions or mobile interface */
 	UFUNCTION(BlueprintCallable, Category="Input")
 	void DoBrake(float BrakeValue);
+
+	// Debug accessors for UI
+	float GetThrottleInput()  const { return CurrentThrottleInput; }
+	float GetBrakeInput()     const { return CurrentBrakeInput; }
+	float GetSteeringInput()  const { return CurrentSteeringInput; }
 
 	/** Handle brake start input by input actions or mobile interface */
 	UFUNCTION(BlueprintCallable, Category="Input")

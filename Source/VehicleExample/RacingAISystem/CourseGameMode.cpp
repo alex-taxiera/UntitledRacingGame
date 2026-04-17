@@ -12,6 +12,7 @@
 #include "RacingVehicleSystem/OwnedVehicle.h"
 #include "RacingVehicleSystem/VehicleDefinition.h"
 #include "SChallengePromptWidget.h"
+#include "SInputDebugWidget.h"
 #include "EngineUtils.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/PlayerStartPIE.h"
@@ -81,11 +82,35 @@ void ACourseGameMode::BeginPlay()
 
     GetWorldTimerManager().SetTimer(DiagnosticTimerHandle,
         this, &ACourseGameMode::LogVehicleDiagnostics, 1.0f, false);
+
+    // Add the input debug overlay once the pawn is available.
+    // We defer one frame so the player pawn is guaranteed to be possessed.
+    GetWorldTimerManager().SetTimerForNextTick([this]()
+    {
+        AVehicleExamplePawn* PlayerPawn = GetPlayerVehiclePawn();
+        if (PlayerPawn && GEngine && GEngine->GameViewport)
+        {
+            InputDebugWidget = SNew(SInputDebugWidget)
+                .PlayerPawn(PlayerPawn);
+            GEngine->GameViewport->AddViewportWidgetContent(
+                InputDebugWidget.ToSharedRef(), /*ZOrder=*/5);
+        }
+    });
 }
 
 // ---------------------------------------------------------------------------
 // NPC Spawning
 // ---------------------------------------------------------------------------
+
+void ACourseGameMode::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+    if (InputDebugWidget.IsValid() && GEngine && GEngine->GameViewport)
+    {
+        GEngine->GameViewport->RemoveViewportWidgetContent(InputDebugWidget.ToSharedRef());
+    }
+    InputDebugWidget.Reset();
+    Super::EndPlay(EndPlayReason);
+}
 
 void ACourseGameMode::SpawnNPCs()
 {

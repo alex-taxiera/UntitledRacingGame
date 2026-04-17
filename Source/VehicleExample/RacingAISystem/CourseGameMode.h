@@ -11,6 +11,7 @@ class ACourseSplineActor;
 class ANPCPatrolActor;
 class AVehicleExamplePawn;
 class SChallengePromptWidget;
+class SInputDebugWidget;
 class UNPCRacerData;
 
 /**
@@ -44,6 +45,7 @@ public:
 
     virtual void InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage) override;
     virtual void BeginPlay() override;
+    virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
     UFUNCTION(BlueprintCallable, Category = "Course")
     void OnBattleEnded();
@@ -82,6 +84,7 @@ private:
     TObjectPtr<ANPCPatrolActor> ActiveBattleNPC;
 
     TSharedPtr<SChallengePromptWidget> ChallengeWidget;
+    TSharedPtr<SInputDebugWidget>      InputDebugWidget;
     FTimerHandle DiagnosticTimerHandle;
 
     void SpawnNPCs();
