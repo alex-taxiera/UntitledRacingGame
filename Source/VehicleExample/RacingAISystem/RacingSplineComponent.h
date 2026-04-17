@@ -62,6 +62,22 @@ public:
     float GetLookaheadCurvature(float DistanceAlongSpline, float LookaheadDist) const;
 
     /**
+     * Scans the entire lookahead window and returns the WORST (highest) curvature
+     * found at any point within it.  Use this instead of GetLookaheadCurvature
+     * when you need to know the tightest corner the car will face, not just the
+     * curvature at one arbitrary sample point ahead.
+     *
+     * @param DistanceAlongSpline  Start distance.
+     * @param LookaheadDist        How far ahead (cm) to scan.
+     * @param SampleStep           Distance between each curvature sample (cm).
+     *                             Smaller = more accurate but more expensive.
+     */
+    UFUNCTION(BlueprintCallable, Category = "RacingSpline")
+    float GetMaxCurvatureInRange(float DistanceAlongSpline,
+                                 float LookaheadDist,
+                                 float SampleStep = 200.0f) const;
+
+    /**
      * Returns the world-space forward tangent direction at the given spline distance.
      * Use this to align the NPC's steering input with the racing line.
      */

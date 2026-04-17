@@ -91,6 +91,9 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "NPC")
     bool IsInBattle() const { return bInBattle; }
 
+    /** Logs AI controller internal state — call from diagnostics only. */
+    void LogAIDiagnostics() const;
+
     // -----------------------------------------------------------------------
     // Delegate — bind in ACourseGameMode
     // -----------------------------------------------------------------------

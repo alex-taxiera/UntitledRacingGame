@@ -83,6 +83,39 @@ float URacingSplineComponent::GetLookaheadCurvature(float DistanceAlongSpline,
     return (ArcLength > SMALL_NUMBER) ? (AngleRad / ArcLength) : 0.0f;
 }
 
+float URacingSplineComponent::GetMaxCurvatureInRange(float DistanceAlongSpline,
+                                                      float LookaheadDist,
+                                                      float SampleStep) const
+{
+    const float TotalLength = GetSplineLength();
+    if (TotalLength <= 0.0f || LookaheadDist <= 0.0f) { return 0.0f; }
+
+    float MaxCurvature = 0.0f;
+    const float EndDist = DistanceAlongSpline + LookaheadDist;
+
+    for (float D = DistanceAlongSpline; D < EndDist; D += SampleStep)
+    {
+        const float D0 = IsClosedLoop() ? FMath::Fmod(D, TotalLength)
+                                        : FMath::Min(D, TotalLength);
+        const float D1 = IsClosedLoop() ? FMath::Fmod(D + SampleStep, TotalLength)
+                                        : FMath::Min(D + SampleStep, TotalLength);
+
+        const FVector T0 = GetTangentAtDistanceAlongSpline(
+            D0, ESplineCoordinateSpace::World).GetSafeNormal();
+        const FVector T1 = GetTangentAtDistanceAlongSpline(
+            D1, ESplineCoordinateSpace::World).GetSafeNormal();
+
+        const float Dot      = FMath::Clamp(FVector::DotProduct(T0, T1), -1.0f, 1.0f);
+        const float Angle    = FMath::Acos(Dot);
+        const float Arc      = FMath::Abs(D1 - D0);
+        const float Curvature = (Arc > SMALL_NUMBER) ? (Angle / Arc) : 0.0f;
+
+        MaxCurvature = FMath::Max(MaxCurvature, Curvature);
+    }
+
+    return MaxCurvature;
+}
+
 FVector URacingSplineComponent::GetDirectionAtDistance(float Distance) const
 {
     return GetTangentAtDistanceAlongSpline(Distance, ESplineCoordinateSpace::World).GetSafeNormal();

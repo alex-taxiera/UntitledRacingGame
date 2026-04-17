@@ -333,6 +333,7 @@ void ACourseGameMode::LogVehicleDiagnostics()
         UE_LOG(LogTemp, Warning,
             TEXT("DIAG: NPC '%s' | Pos=(%.0f, %.0f, %.0f) | SimPhys=%d"),
             *NPCPawn->GetClass()->GetName(), NPos.X, NPos.Y, NPos.Z, bNSim);
+        Patrol->LogAIDiagnostics();
         DrawDebugSphere(GetWorld(), NPos, 80.f, 12, FColor::Yellow, false, 10.f);
     }
 

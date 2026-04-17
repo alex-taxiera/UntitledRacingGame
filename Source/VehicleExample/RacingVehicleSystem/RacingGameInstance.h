@@ -151,15 +151,24 @@ public:
 
 private:
 
-    /** The level to open when starting or continuing a game. */
-    static const FName GameLevelName;
-
-    /** The course / race level name. */
-    static const FName CourseLevelName;
-
-    /** The title screen level name. */
-    static const FName TitleLevelName;
-
     /** Currency granted to the player at the start of a new game. */
     static const int32 StartingCurrency;
+
+public:
+
+    // -----------------------------------------------------------------------
+    // Level Names — set these in the Blueprint subclass class defaults
+    // -----------------------------------------------------------------------
+
+    /** The hub / garage level opened by StartNewGame and ContinueGame. */
+    UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Racing|Levels")
+    FName GameLevelName = TEXT("Hub");
+
+    /** The open-world course level opened by StartCourse. */
+    UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Racing|Levels")
+    FName CourseLevelName = TEXT("Lvl_Timetrial");
+
+    /** The title screen level opened by ReturnToTitle. */
+    UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Racing|Levels")
+    FName TitleLevelName = TEXT("TitleScreen");
 };

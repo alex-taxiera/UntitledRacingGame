@@ -80,6 +80,12 @@ void ARacingAIController::StartRace()
     TimeInCurrentState    = 0.0f;
     ActiveStates.Reset();
     ActiveStates.Add(ERacingAIState::Racing);
+
+    // Wake the physics body immediately so throttle takes effect on frame 1.
+    if (OwnPawn && OwnPawn->GetMesh())
+    {
+        OwnPawn->GetMesh()->WakeAllRigidBodies();
+    }
 }
 
 void ARacingAIController::EndRace()
@@ -227,8 +233,10 @@ void ARacingAIController::UpdateContext()
         // Lookahead curvature
         const float Lookahead = RacerData
                               ? RacerData->AIConfig.CorneringConfig.LookaheadDistance
-                              : 2000.0f;
-        Context.UpcomingCurvature = RacingSpline->GetLookaheadCurvature(
+                              : 5000.0f;
+        // Sample the WORST curvature across the full window so the car
+        // brakes for the tightest point ahead, not just one arbitrary sample.
+        Context.UpcomingCurvature = RacingSpline->GetMaxCurvatureInRange(
             Context.OwnSplineDistance, Lookahead);
 
         const float CurvThreshold = RacerData
@@ -414,10 +422,10 @@ void ARacingAIController::ExecuteState()
         Steering = ComputeSplineSteeringInput();
     }
 
-    // --- Cornering modifier (overrides throttle and blends steering toward spline) ---
+    // --- Cornering modifier ---
     if (ActiveStates.Contains(ERacingAIState::Cornering) || Context.bCornerAhead)
     {
-        ApplyCorneringModifier(Throttle, Steering);
+        ApplyCorneringModifier(Throttle, Steering, Brake);
     }
 
     // --- Rubber-band throttle boost ---
@@ -450,9 +458,15 @@ void ARacingAIController::Execute_Idle()
     URacingSplineComponent* Spline = PatrolSpline ? PatrolSpline : RacingSpline;
     if (!Spline) { return; }
 
-    const float IdleThrottle = RacerData
-        ? RacerData->AIConfig.IdleThrottle
-        : 0.35f;
+    // Chaos puts vehicle bodies to sleep when stationary.
+    // Wake every frame so throttle input is always processed.
+    if (USkeletalMeshComponent* Mesh = OwnPawn->GetMesh())
+    {
+        Mesh->WakeAllRigidBodies();
+    }
+
+    const float TargetSpeedCmS = (RacerData ? RacerData->AIConfig.IdleTargetSpeedMPH : 35.0f)
+                                 * 44.704f; // MPH -> cm/s
     const float FollowStrength = RacerData
         ? RacerData->AIConfig.IdleSplineFollowStrength
         : 0.65f;
@@ -460,19 +474,33 @@ void ARacingAIController::Execute_Idle()
     const float SplineLen  = Spline->GetSplineLength();
     const FVector MyPos    = OwnPawn->GetActorLocation();
     const float  NearDist  = Spline->GetNearestSplineDistance(MyPos);
-    // Look ahead a fixed 800 cm for the follow target
     const float  TargetDist = FMath::Fmod(NearDist + 800.f, SplineLen);
     const FVector TargetPos = Spline->GetLocationAtDistance(TargetDist);
 
-    // Steering: signed angle to target in actor-local space
     const FVector ToTarget   = (TargetPos - MyPos).GetSafeNormal();
-    const FVector RightVec   = OwnPawn->GetActorRightVector();
-    const float   Lateral    = FVector::DotProduct(ToTarget, RightVec);
-    const float   Steering   = FMath::Clamp(Lateral * FollowStrength, -1.f, 1.f);
+    const FVector RightVec   = OwnPawn->GetActorRightVector();\
 
-    SetThrottle(IdleThrottle);
-    SetSteering(Steering);
-    SetBrake(0.f);
+    // Proportional speed controller: ramp throttle linearly from 0 at target
+    // speed down to full throttle when 500 cm/s (~11 MPH) below target.
+    // Naturally adds throttle on uphills and lifts off on downhills.
+    const float CurrentSpeedCmS = OwnPawn->GetChaosVehicleMovement()->GetForwardSpeed();
+    const float SpeedError       = TargetSpeedCmS - CurrentSpeedCmS;
+    const float ProportionalGain = 500.0f; // cm/s error that maps to full throttle
+
+    float Throttle = FMath::Clamp(SpeedError / ProportionalGain, 0.f, 1.f);
+    float Steering = FMath::Clamp(
+        FVector::DotProduct(ToTarget, RightVec) * FollowStrength, -1.f, 1.f);
+    float Brake    = 0.f;
+
+    // Apply corner braking so idle NPCs slow down for turns.
+    if (Context.bCornerAhead)
+    {
+        ApplyCorneringModifier(Throttle, Steering, Brake);
+    }
+
+    SetThrottle(FMath::Clamp(Throttle, 0.f, 1.f));
+    SetSteering(FMath::Clamp(Steering, -1.f, 1.f));
+    SetBrake(FMath::Clamp(Brake, 0.f, 1.f));
 }
 
 void ARacingAIController::Execute_BlockingMirror()
@@ -497,18 +525,34 @@ void ARacingAIController::Execute_Nitro()
     // e.g. OwnPawn->ActivateNitro();
 }
 
-void ARacingAIController::ApplyCorneringModifier(float& OutThrottle, float& OutSteering) const
+void ARacingAIController::ApplyCorneringModifier(float& OutThrottle, float& OutSteering, float& OutBrake) const
 {
     if (!RacerData) { return; }
 
     const FCorneringConfig& Cfg = RacerData->AIConfig.CorneringConfig;
 
-    // Reduce throttle when speed exceeds the configured corner limit
-    if (Cfg.MaxCornerSpeedCmS > 0.0f && Context.OwnSpeedCmS > Cfg.MaxCornerSpeedCmS)
+    if (Context.UpcomingCurvature > SMALL_NUMBER)
     {
-        const float SpeedExcess = (Context.OwnSpeedCmS - Cfg.MaxCornerSpeedCmS)
-                                / FMath::Max(Context.OwnSpeedCmS, 1.0f);
-        OutThrottle = FMath::Max(0.0f, OutThrottle - SpeedExcess);
+        // Physics: max safe speed = sqrt(lateral_accel / curvature)
+        // curvature is in rad/cm so radius = 1/curvature in cm
+        const float PhysicsMaxSpeed = FMath::Sqrt(
+            Cfg.AILateralAccelCmS2 / Context.UpcomingCurvature);
+
+        // Optional designer cap — use the lower of physics and cap (if cap is set)
+        const float MaxSpeedCmS = (Cfg.MaxCornerSpeedCmS > 0.0f)
+            ? FMath::Min(PhysicsMaxSpeed, Cfg.MaxCornerSpeedCmS)
+            : PhysicsMaxSpeed;
+
+        if (Context.OwnSpeedCmS > MaxSpeedCmS)
+        {
+            OutThrottle = 0.0f;
+
+            // Brake proportional to how far over the limit we are.
+            // At 2x the limit ? full brake; scales linearly.
+            const float OverFraction = (Context.OwnSpeedCmS - MaxSpeedCmS)
+                                     / FMath::Max(MaxSpeedCmS, 1.0f);
+            OutBrake = FMath::Clamp(OverFraction, 0.0f, 1.0f);
+        }
     }
 
     // Blend steering toward the spline tangent
@@ -550,7 +594,12 @@ void ARacingAIController::SetSteering(float Value)
 
 void ARacingAIController::SetBrake(float Value)
 {
-    if (OwnPawn) { OwnPawn->DoBrake(Value); }
+    // Do NOT use DoBrake — it unconditionally resets throttle to 0,
+    // which is correct for player input but wrong for AI.
+    if (OwnPawn && OwnPawn->GetChaosVehicleMovement())
+    {
+        OwnPawn->GetChaosVehicleMovement()->SetBrakeInput(Value);
+    }
 }
 
 float ARacingAIController::ComputeSplineSteeringInput() const

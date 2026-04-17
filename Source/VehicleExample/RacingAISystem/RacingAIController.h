@@ -126,6 +126,13 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "RacingAI")
     bool IsStateActive(ERacingAIState State) const { return ActiveStates.Contains(State); }
 
+    bool IsIdleActive()  const { return bIdleActive; }
+    bool IsRaceActive()  const { return bRaceActive; }
+    AVehicleExamplePawn*    GetOwnPawn()       const { return OwnPawn; }
+    UNPCRacerData*          GetRacerData()     const { return RacerData; }
+    URacingSplineComponent* GetPatrolSpline()  const { return PatrolSpline; }
+    URacingSplineComponent* GetRacingSpline()  const { return RacingSpline; }
+
     /** Returns the most recently computed AI context (read-only snapshot). */
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "RacingAI")
     const FRacingAIContext& GetContext() const { return Context; }
@@ -229,7 +236,13 @@ private:
     void Execute_BlockingSlowDrift(const FAggressionBehaviorRule& Rule);
     void Execute_Bumping(const FAggressionBehaviorRule& Rule);
     void Execute_Nitro();
-    void ApplyCorneringModifier(float& OutThrottle, float& OutSteering) const;
+
+    /**
+     * Reduces throttle and applies brakes proportionally when the NPC is
+     * over the configured corner speed limit.  Also blends steering toward
+     * the spline tangent.  OutBrake is additive — call site should clamp 0-1.
+     */
+    void ApplyCorneringModifier(float& OutThrottle, float& OutSteering, float& OutBrake) const;
     void ApplyRubberBand(float& OutThrottle) const;
 
     // -----------------------------------------------------------------------

@@ -99,7 +99,12 @@ void ANPCPatrolActor::SpawnNPCPawn()
     // when StartIdle() is called.
     AIController->SetRacerData(RacerData);
     AIController->SetPatrolSpline(PatrolSpline);
-    AIController->SetRacingSpline(PatrolSpline);
+    // Only override the racing spline if we actually have a patrol spline.
+    // If null, BeginPlay's auto-find result is preserved as fallback.
+    if (PatrolSpline)
+    {
+        AIController->SetRacingSpline(PatrolSpline);
+    }
     if (PlayerPawn)
     {
         AIController->SetPlayerPawn(PlayerPawn);
@@ -126,6 +131,24 @@ void ANPCPatrolActor::EndBattle()
     bInBattle = false;
     AIController->EndRace();
     AIController->StartIdle();
+}
+
+void ANPCPatrolActor::LogAIDiagnostics() const
+{
+    if (!AIController)
+    {
+        UE_LOG(LogTemp, Error, TEXT("  NPC DIAG: AIController is NULL"));
+        return;
+    }
+    UE_LOG(LogTemp, Warning,
+        TEXT("  NPC DIAG: AIController='%s' | OwnPawn=%s | RacerData=%s | IdleActive=%d | RaceActive=%d | PatrolSpline=%s | RacingSpline=%s"),
+        *AIController->GetClass()->GetName(),
+        AIController->GetOwnPawn()      ? TEXT("OK") : TEXT("NULL"),
+        AIController->GetRacerData()    ? TEXT("OK") : TEXT("NULL"),
+        AIController->IsIdleActive(),
+        AIController->IsRaceActive(),
+        AIController->GetPatrolSpline() ? TEXT("OK") : TEXT("NULL"),
+        AIController->GetRacingSpline() ? TEXT("OK") : TEXT("NULL"));
 }
 
 // ---------------------------------------------------------------------------

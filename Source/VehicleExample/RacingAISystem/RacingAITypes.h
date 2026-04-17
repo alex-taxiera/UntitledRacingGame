@@ -239,33 +239,42 @@ struct FCorneringConfig
     GENERATED_BODY()
 
     /**
-     * Distance in cm along the spline to look ahead for curvature sampling.
-     * Larger values give earlier braking cues.
+     * Distance in cm ahead to scan for corners.
+     * Must be large enough for the car to brake. At 100 km/h braking at ~1g,
+     * stopping distance is ~40 m — keep this above 5000 cm.
      */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cornering",
         meta = (ClampMin = "100.0"))
-    float LookaheadDistance = 2000.0f;
+    float LookaheadDistance = 5000.0f;
 
     /**
-     * Curvature magnitude above which the NPC enters the Cornering modifier state.
-     * Curvature is measured as 1/radius in cm; higher values = tighter corners.
-     * Tune this against your track geometry.
+     * Curvature above which cornering logic activates (radians/cm = 1/radius in cm).
+     * 0.0003 = ~33 m radius curve.  0.0008 = ~12.5 m radius.
+     * Lower this to react to gentler bends.
      */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cornering",
         meta = (ClampMin = "0.0"))
-    float CurvatureThreshold = 0.0008f;
+    float CurvatureThreshold = 0.0003f;
 
     /**
-     * The NPC will reduce throttle so its speed does not exceed this value (cm/s)
-     * through a corner.  Set to 0 to disable speed capping.
+     * Maximum lateral acceleration the car can sustain (cm/s²).
+     * Physics-based max corner speed = sqrt(AILateralAccelCmS2 / curvature).
+     * 900 cm/s² (~0.9g) is a good starting point for the sports car.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cornering",
+        meta = (ClampMin = "100.0"))
+    float AILateralAccelCmS2 = 900.0f;
+
+    /**
+     * Optional hard cap on corner speed (cm/s).
+     * Set to 0 to rely purely on the physics-based calculation above.
      */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cornering",
         meta = (ClampMin = "0.0"))
-    float MaxCornerSpeedCmS = 2000.0f;
+    float MaxCornerSpeedCmS = 0.0f;
 
     /**
-     * How strongly the NPC steers toward the spline tangent while cornering (0–1).
-     * 1.0 = immediate snap to spline direction; lower = gentler correction.
+     * How strongly the NPC steers toward the spline tangent while cornering (0-1).
      */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cornering",
         meta = (ClampMin = "0.0", ClampMax = "1.0"))
@@ -334,12 +343,13 @@ struct FRacingAIConfig
     // -----------------------------------------------------------------------
 
     /**
-     * Throttle fraction used during idle patrol (0-1).
-     * 0.35 gives a leisurely cruise; raise for more aggressive patrol pace.
+     * Target speed for idle patrol in MPH.
+     * The AI uses a proportional throttle controller to hold this speed,
+     * so it naturally adds throttle uphill and lifts off downhill.
      */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Idle",
-        meta = (ClampMin = "0.0", ClampMax = "1.0"))
-    float IdleThrottle = 0.35f;
+        meta = (ClampMin = "0.0"))
+    float IdleTargetSpeedMPH = 35.0f;
 
     /**
      * How strongly the NPC steers toward the patrol spline during idle (0-1).

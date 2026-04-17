@@ -63,7 +63,9 @@ AVehicleExampleSportsCar::AVehicleExampleSportsCar()
 	GetChaosVehicleMovement()->TransmissionSetup.ReverseGearRatios[0] = 4.04f;
 
 	// Set up the steering
-	// NOTE: Check the Blueprint asset for the Steering Curve
+	// NOTE: Also edit the Steering Curve in the Blueprint asset — flatten it
+	// so steering angle doesn't drop off too sharply at speed.
+	// A good starting curve: 1.0 at 0 km/h, 0.6 at 120 km/h (not 0.2).
 	GetChaosVehicleMovement()->SteeringSetup.SteeringType = ESteeringType::Ackermann;
-	GetChaosVehicleMovement()->SteeringSetup.AngleRatio = 0.7f;
+	GetChaosVehicleMovement()->SteeringSetup.AngleRatio = 1.0f;
 }
