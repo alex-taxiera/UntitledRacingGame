@@ -51,6 +51,9 @@ public:
     virtual void Tick(float DeltaSeconds) override;
     virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
+    /** Called when a new player controller logs into the server. */
+    virtual void PostLogin(APlayerController* NewPlayer) override;
+
     UFUNCTION(BlueprintCallable, Category = "Course")
     void OnBattleEnded();
 
@@ -185,4 +188,11 @@ private:
     AVehicleExamplePawn* GetPlayerVehiclePawn() const;
     ACourseSplineActor*  FindCourseSplineActor() const;
     void LogVehicleDiagnostics();
+
+    /**
+     * Finds a good spawn transform for a newly-joined player.
+     * Picks the spline point closest to the centroid of all existing players,
+     * then offsets perpendicular to the spline so they don't overlap.
+     */
+    FTransform GetSpawnTransformForJoiningPlayer() const;
 };

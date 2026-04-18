@@ -36,6 +36,7 @@ void SGaragePanel::Construct(const FArguments& InArgs)
     GameInstance           = InArgs._GameInstance;
     RenderTarget           = InArgs._RenderTarget;
     OnEnterRaceRequested   = InArgs._OnEnterRaceRequested;
+    OnFindMatchRequested   = InArgs._OnFindMatchRequested;
     OnMenuRequested        = InArgs._OnMenuRequested;
     OnSystemMenuRequested  = InArgs._OnSystemMenuRequested;
 
@@ -321,6 +322,41 @@ TSharedRef<SWidget> SGaragePanel::MakeBottomBar()
         + SHorizontalBox::Slot()
         .FillWidth(1.f)
 
+        // Find Match button
+        + SHorizontalBox::Slot()
+        .AutoWidth()
+        .Padding(FMargin(0.f, 0.f, 8.f, 0.f))
+        [
+            SNew(SBox)
+            .WidthOverride(200.f)
+            .HeightOverride(48.f)
+            [
+                SNew(SButton)
+                .IsEnabled_Lambda([this]() -> bool { return !bSearchingForMatch; })
+                .OnClicked_Lambda([this]() -> FReply
+                {
+                    bSearchingForMatch = true;
+                    OnFindMatchRequested.ExecuteIfBound();
+                    return FReply::Handled();
+                })
+                .HAlign(HAlign_Center)
+                .VAlign(VAlign_Center)
+                .ButtonStyle(&FCoreStyle::Get().GetWidgetStyle<FButtonStyle>("Button"))
+                [
+                    SNew(STextBlock)
+                    .Text_Lambda([this]() -> FText
+                    {
+                        return bSearchingForMatch
+                            ? NSLOCTEXT("Garage", "Searching", "SEARCHING...")
+                            : NSLOCTEXT("Garage", "FindMatch", "FIND MATCH");
+                    })
+                    .Font(FCoreStyle::GetDefaultFontStyle("Bold",
+                        (int32)GarageLayout::FontSize))
+                    .ColorAndOpacity(FLinearColor(0.3f, 0.7f, 1.0f))
+                ]
+            ]
+        ]
+
         // Enter Race button
         + SHorizontalBox::Slot()
         .AutoWidth()
@@ -405,7 +441,7 @@ FText SGaragePanel::GetCurrencyText() const
     URacingGameInstance* GI = GameInstance.Get();
     if (!GI) { return FText::GetEmpty(); }
     return FText::Format(
-        NSLOCTEXT("Garage", "Currency", "Currency:  ¥ {0}"),
+        NSLOCTEXT("Garage", "Currency", "Currency:  ï¿½ {0}"),
         FText::AsNumber(GI->GetVehicleInventory()->PlayerCurrency));
 }
 
@@ -426,7 +462,7 @@ FText SGaragePanel::GetSlotLabel(int32 SlotIndex) const
     const TArray<FName>& Equipped = GI->GetPerkManager()->PerkState->EquippedSkillPerkIDs;
     if (!Equipped.IsValidIndex(SlotIndex) || Equipped[SlotIndex].IsNone())
     {
-        return NSLOCTEXT("Garage", "EmptySlot", "— empty —");
+        return NSLOCTEXT("Garage", "EmptySlot", "ï¿½ empty ï¿½");
     }
 
     const FName PerkID = Equipped[SlotIndex];

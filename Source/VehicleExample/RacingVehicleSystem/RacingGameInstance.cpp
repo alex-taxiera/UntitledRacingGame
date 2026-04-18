@@ -6,6 +6,8 @@
 #include "RacingSaveGame.h"
 #include "OwnedVehicle.h"
 #include "VehicleDefinition.h"
+#include "OnlineSubsystem.h"
+#include "OnlineSessionSettings.h"
 
 const int32 URacingGameInstance::StartingCurrency = 10000000;
 
@@ -229,5 +231,132 @@ void URacingGameInstance::ReturnToTitle()
         }
     }
     UGameplayStatics::OpenLevel(this, TitleLevelName);
+}
+
+// ---------------------------------------------------------------------------
+// Multiplayer / Session management
+// ---------------------------------------------------------------------------
+
+static const FName CourseSessionName = TEXT("CourseSession");
+
+IOnlineSessionPtr URacingGameInstance::GetSessionInterface() const
+{
+    IOnlineSubsystem* OSS = IOnlineSubsystem::Get();
+    return OSS ? OSS->GetSessionInterface() : nullptr;
+}
+
+void URacingGameInstance::HostCourseSession()
+{
+    IOnlineSessionPtr Sessions = GetSessionInterface();
+    if (!Sessions.IsValid()) { return; }
+
+    // Destroy any leftover session from a previous run before creating a new one.
+    if (Sessions->GetNamedSession(CourseSessionName))
+    {
+        Sessions->DestroySession(CourseSessionName);
+    }
+
+    FOnlineSessionSettings Settings;
+    Settings.bIsLANMatch           = true;
+    Settings.NumPublicConnections  = MaxPlayersPerSession;
+    Settings.bShouldAdvertise      = true;
+    Settings.bAllowJoinInProgress  = true;
+    Settings.bUsesPresence         = false;
+    Settings.bAllowInvites         = false;
+
+    Sessions->OnCreateSessionCompleteDelegates.AddUObject(
+        this, &URacingGameInstance::OnCreateSessionComplete);
+
+    Sessions->CreateSession(0, CourseSessionName, Settings);
+}
+
+void URacingGameInstance::OnCreateSessionComplete(FName SessionName, bool bWasSuccessful)
+{
+    IOnlineSessionPtr Sessions = GetSessionInterface();
+    if (Sessions.IsValid())
+    {
+        Sessions->ClearOnCreateSessionCompleteDelegates(this);
+    }
+    UE_LOG(LogTemp, Log, TEXT("URacingGameInstance::OnCreateSessionComplete — %s: %s"),
+        *SessionName.ToString(), bWasSuccessful ? TEXT("OK") : TEXT("FAILED"));
+}
+
+void URacingGameInstance::FindCourseSessions()
+{
+    IOnlineSessionPtr Sessions = GetSessionInterface();
+    if (!Sessions.IsValid() || bSearchingForSession) { return; }
+
+    bSearchingForSession = true;
+
+    SessionSearch = MakeShareable(new FOnlineSessionSearch());
+    SessionSearch->bIsLanQuery      = true;
+    SessionSearch->MaxSearchResults = 16;
+
+    Sessions->OnFindSessionsCompleteDelegates.AddUObject(
+        this, &URacingGameInstance::OnFindSessionsComplete);
+
+    Sessions->FindSessions(0, SessionSearch.ToSharedRef());
+}
+
+void URacingGameInstance::OnFindSessionsComplete(bool bWasSuccessful)
+{
+    IOnlineSessionPtr Sessions = GetSessionInterface();
+    if (Sessions.IsValid())
+    {
+        Sessions->ClearOnFindSessionsCompleteDelegates(this);
+    }
+
+    bSearchingForSession = false;
+
+    const int32 NumFound = (bWasSuccessful && SessionSearch.IsValid())
+        ? SessionSearch->SearchResults.Num() : 0;
+
+    UE_LOG(LogTemp, Log, TEXT("URacingGameInstance::OnFindSessionsComplete — found %d session(s)"),
+        NumFound);
+
+    OnSessionsFound.Broadcast(NumFound > 0);
+}
+
+void URacingGameInstance::JoinFirstFoundSession()
+{
+    IOnlineSessionPtr Sessions = GetSessionInterface();
+    if (!Sessions.IsValid()) { return; }
+    if (!SessionSearch.IsValid() || SessionSearch->SearchResults.Num() == 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("URacingGameInstance::JoinFirstFoundSession — no results"));
+        return;
+    }
+
+    Sessions->OnJoinSessionCompleteDelegates.AddUObject(
+        this, &URacingGameInstance::OnJoinSessionComplete);
+
+    Sessions->JoinSession(0, CourseSessionName, SessionSearch->SearchResults[0]);
+}
+
+void URacingGameInstance::OnJoinSessionComplete(FName SessionName,
+                                                EOnJoinSessionCompleteResult::Type Result)
+{
+    IOnlineSessionPtr Sessions = GetSessionInterface();
+    if (Sessions.IsValid())
+    {
+        Sessions->ClearOnJoinSessionCompleteDelegates(this);
+    }
+
+    if (Result != EOnJoinSessionCompleteResult::Success)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("URacingGameInstance::OnJoinSessionComplete — failed (%d)"),
+            static_cast<int32>(Result));
+        return;
+    }
+
+    FString TravelURL;
+    if (Sessions->GetResolvedConnectString(SessionName, TravelURL))
+    {
+        APlayerController* PC = GetFirstLocalPlayerController();
+        if (PC)
+        {
+            PC->ClientTravel(TravelURL, ETravelType::TRAVEL_Absolute);
+        }
+    }
 }
 

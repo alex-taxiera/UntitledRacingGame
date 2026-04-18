@@ -53,6 +53,7 @@ void SHubRootWidget::Construct(const FArguments& InArgs)
         .GameInstance(GI)
         .RenderTarget(RT)
         .OnEnterRaceRequested(this, &SHubRootWidget::OnEnterRaceRequested)
+        .OnFindMatchRequested(this, &SHubRootWidget::OnFindMatchRequested)
         .OnMenuRequested(this, &SHubRootWidget::OpenMenu)
         .OnSystemMenuRequested(this, &SHubRootWidget::OpenSystemMenu);
 
@@ -185,7 +186,7 @@ void SHubRootWidget::OnVehiclePurchased(UVehicleDefinition* /*Definition*/)
         GI->SaveGame();
     }
 
-    // First purchase — lift the dealership lock and move to garage
+    // First purchase ï¿½ lift the dealership lock and move to garage
     bDealershipLocked = false;
     ShowPanel(EHubPanel::Garage);
 }
@@ -204,6 +205,40 @@ void SHubRootWidget::OnEnterRaceRequested()
     if (GI)
     {
         GI->StartCourse();
+    }
+}
+
+void SHubRootWidget::OnFindMatchRequested()
+{
+    URacingGameInstance* GI = GameInstance.Get();
+    if (!GI) { return; }
+
+    // Bind the result delegate â€” fires once when the search is done.
+    GI->OnSessionsFound.AddSP(this, &SHubRootWidget::OnSessionsFound);
+    GI->FindCourseSessions();
+}
+
+void SHubRootWidget::OnSessionsFound(bool bSuccess)
+{
+    // Always unsubscribe so we don't accumulate bindings.
+    URacingGameInstance* GI = GameInstance.Get();
+    if (GI) { GI->OnSessionsFound.RemoveAll(this); }
+
+    if (GaragePanel.IsValid())
+    {
+        GaragePanel->OnMatchSearchComplete(bSuccess);
+    }
+
+    if (!bSuccess)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("SHubRootWidget: no course sessions found on LAN"));
+        return;
+    }
+
+    // Join the first (and for now only) session found.
+    if (GI)
+    {
+        GI->JoinFirstFoundSession();
     }
 }
 

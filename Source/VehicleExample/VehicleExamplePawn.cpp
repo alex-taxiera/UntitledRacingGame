@@ -15,11 +15,18 @@
 #include "RacingVehicleSystem/RacingGameInstance.h"
 #include "RacingVehicleSystem/VehicleInventory.h"
 #include "RacingVehicleSystem/OwnedVehicle.h"
+#include "SChallengePromptWidget.h"
+#include "Engine/GameViewportClient.h"
+#include "Net/UnrealNetwork.h"
 
 #define LOCTEXT_NAMESPACE "VehiclePawn"
 
 AVehicleExamplePawn::AVehicleExamplePawn()
 {
+	// Replicate this pawn to all clients so every player sees every vehicle.
+	bReplicates = true;
+	SetReplicatingMovement(true);
+
 	// construct the front camera boom
 	FrontSpringArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("Front Spring Arm"));
 	FrontSpringArm->SetupAttachment(GetMesh());
@@ -376,6 +383,114 @@ void AVehicleExamplePawn::FlippedCheck()
 		// we're upright. reset the flipped check flag
 		bPreviousFlipCheck = false;
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Player-vs-Player challenge system
+// ---------------------------------------------------------------------------
+
+void AVehicleExamplePawn::RequestChallengePlayer(AVehicleExamplePawn* TargetPawn)
+{
+	if (!TargetPawn || TargetPawn == this) { return; }
+	bHasOutgoingChallenge = true;
+	Server_RequestChallenge(TargetPawn);
+}
+
+void AVehicleExamplePawn::Server_RequestChallenge_Implementation(AVehicleExamplePawn* TargetPawn)
+{
+	if (!TargetPawn || TargetPawn == this) { return; }
+
+	// Validate proximity on the server
+	const float Dist = FVector::Dist(GetActorLocation(), TargetPawn->GetActorLocation());
+	if (Dist > PlayerChallengeRadius * 2.f) { return; }
+
+	// Reject if either participant is already in a challenge
+	if (TargetPawn->PendingChallenger.IsValid()) { return; }
+
+	TargetPawn->PendingChallenger = this;
+	TargetPawn->Client_ReceiveChallengeRequest(this);
+}
+
+void AVehicleExamplePawn::RespondToChallenge(bool bAccepted)
+{
+	AVehicleExamplePawn* Challenger = PendingChallenger.Get();
+	if (!Challenger) { return; }
+	Server_RespondToChallenge(Challenger, bAccepted);
+}
+
+void AVehicleExamplePawn::Server_RespondToChallenge_Implementation(AVehicleExamplePawn* ChallengerPawn,
+                                                                    bool bAccepted)
+{
+	if (!ChallengerPawn) { return; }
+
+	// Clear state on both sides regardless of outcome
+	PendingChallenger = nullptr;
+	ChallengerPawn->bHasOutgoingChallenge = false;
+
+	if (bAccepted)
+	{
+		// Notify both participants so each client can start the race HUD
+		Client_OnChallengeAccepted(ChallengerPawn);
+		ChallengerPawn->Client_OnChallengeAccepted(this);
+	}
+	else
+	{
+		ChallengerPawn->Client_OnChallengeDeclined();
+	}
+}
+
+void AVehicleExamplePawn::Client_ReceiveChallengeRequest_Implementation(AVehicleExamplePawn* ChallengerPawn)
+{
+	// Only do anything meaningful for the locally-controlled pawn
+	if (!IsLocallyControlled()) { return; }
+	ShowPlayerChallengePrompt(ChallengerPawn);
+}
+
+void AVehicleExamplePawn::Client_OnChallengeAccepted_Implementation(AVehicleExamplePawn* OpponentPawn)
+{
+	if (!IsLocallyControlled()) { return; }
+	HidePlayerChallengePrompt();
+	// The game mode handles the actual race start server-side; here we just
+	// dismiss the prompt so the HUD can show the race state.
+	UE_LOG(LogTemp, Log, TEXT("AVehicleExamplePawn: challenge accepted — opponent: %s"),
+		*GetNameSafe(OpponentPawn));
+}
+
+void AVehicleExamplePawn::Client_OnChallengeDeclined_Implementation()
+{
+	if (!IsLocallyControlled()) { return; }
+	bHasOutgoingChallenge = false;
+	UE_LOG(LogTemp, Log, TEXT("AVehicleExamplePawn: challenge was declined"));
+}
+
+void AVehicleExamplePawn::ShowPlayerChallengePrompt(AVehicleExamplePawn* ChallengerPawn)
+{
+	HidePlayerChallengePrompt();
+
+	const FText ChallengeName = FText::FromString(GetNameSafe(ChallengerPawn));
+
+	PlayerChallengeWidget = SNew(SChallengePromptWidget)
+		.ChallengerName(ChallengeName)
+		.OnResponse_Lambda([this](bool bAccepted)
+		{
+			HidePlayerChallengePrompt();
+			RespondToChallenge(bAccepted);
+		});
+
+	if (GEngine && GEngine->GameViewport)
+	{
+		GEngine->GameViewport->AddViewportWidgetContent(
+			PlayerChallengeWidget.ToSharedRef(), /*ZOrder=*/10);
+	}
+}
+
+void AVehicleExamplePawn::HidePlayerChallengePrompt()
+{
+	if (PlayerChallengeWidget.IsValid() && GEngine && GEngine->GameViewport)
+	{
+		GEngine->GameViewport->RemoveViewportWidgetContent(PlayerChallengeWidget.ToSharedRef());
+	}
+	PlayerChallengeWidget.Reset();
 }
 
 #undef LOCTEXT_NAMESPACE

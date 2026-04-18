@@ -17,6 +17,7 @@ void SChallengePromptWidget::Construct(const FArguments& InArgs)
 {
     RacerData  = InArgs._RacerData;
     OnResponse = InArgs._OnResponse;
+    OverrideName = InArgs._ChallengerName;
 
     // Build portrait brush if a texture is available
     UNPCRacerData* Data = RacerData.Get();
@@ -33,15 +34,25 @@ void SChallengePromptWidget::Construct(const FArguments& InArgs)
         }
     }
 
-    const FText NPCName = Data
-        ? Data->RacerName
-        : NSLOCTEXT("Challenge", "UnknownRacer", "Unknown Racer");
+    FText NPCName;
+    if (!OverrideName.IsEmpty())
+    {
+        NPCName = OverrideName;
+    }
+    else if (Data)
+    {
+        NPCName = Data->RacerName;
+    }
+    else
+    {
+        NPCName = NSLOCTEXT("Challenge", "UnknownRacer", "Unknown Racer");
+    }
 
     ChildSlot
     [
         SNew(SOverlay)
 
-        // Dim overlay — does not block input so the player can still drive
+        // Dim overlay ï¿½ does not block input so the player can still drive
         + SOverlay::Slot()
         .VAlign(VAlign_Bottom)
         .HAlign(HAlign_Center)

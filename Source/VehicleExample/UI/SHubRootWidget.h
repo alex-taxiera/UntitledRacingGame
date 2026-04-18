@@ -99,5 +99,11 @@ private:
     /** Called by SGaragePanel's Enter Race button. */
     void OnEnterRaceRequested();
 
+    /** Called by SGaragePanel's Find Match button — starts LAN session search. */
+    void OnFindMatchRequested();
+
+    /** Callback bound to URacingGameInstance::OnSessionsFound. */
+    void OnSessionsFound(bool bSuccess);
+
     void ApplyPanelVisibility();
 };
