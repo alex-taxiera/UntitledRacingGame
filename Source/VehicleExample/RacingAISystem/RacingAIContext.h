@@ -18,7 +18,7 @@ class AVehicleExamplePawn;
  * never need to query the world directly.
  *
  * Non-owning pointers (OwnPawn, PlayerPawn, RacingSpline) are valid only
- * for the duration of the tick — do not cache this struct across frames.
+ * for the duration of the tick ï¿½ do not cache this struct across frames.
  */
 USTRUCT(BlueprintType)
 struct FRacingAIContext
@@ -57,7 +57,7 @@ struct FRacingAIContext
     UPROPERTY(BlueprintReadOnly, Category = "AIContext")
     int32 OwnGear = 0;
 
-    /** Remaining nitro as a 0–1 fraction of max capacity. */
+    /** Remaining nitro as a 0ï¿½1 fraction of max capacity. */
     UPROPERTY(BlueprintReadOnly, Category = "AIContext")
     float OwnNitroFraction = 0.0f;
 
@@ -68,6 +68,27 @@ struct FRacingAIContext
     /** Lateral offset of this NPC from the racing line in cm (negative = left). */
     UPROPERTY(BlueprintReadOnly, Category = "AIContext")
     float OwnLateralOffsetCm = 0.0f;
+
+    // -----------------------------------------------------------------------
+    // Current lane state (relative to CurrentLaneSpline, not the ref spline)
+    // -----------------------------------------------------------------------
+
+    /**
+     * Distance along CurrentLaneSpline for this NPC's current position.
+     * Used by ComputeSplineSteeringInput() and Execute_Idle() to aim at a
+     * lookahead point on the actual lane being driven, not the reference line.
+     */
+    UPROPERTY(BlueprintReadOnly, Category = "AIContext")
+    float CurrentLaneSplineDistance = 0.0f;
+
+    /**
+     * Lateral offset from CurrentLaneSpline in cm (negative = left).
+     * Used in place of OwnLateralOffsetCm for lane-centring corrections so
+     * the NPC steers to the centre of its chosen lane rather than the
+     * reference spline centerline.
+     */
+    UPROPERTY(BlueprintReadOnly, Category = "AIContext")
+    float CurrentLaneLateralOffsetCm = 0.0f;
 
     // -----------------------------------------------------------------------
     // Corner awareness
@@ -104,7 +125,7 @@ struct FRacingAIContext
     float TimeInCurrentStateSec = 0.0f;
 
     // -----------------------------------------------------------------------
-    // Non-owning pointers (valid for this tick only — do not cache)
+    // Non-owning pointers (valid for this tick only ï¿½ do not cache)
     // -----------------------------------------------------------------------
 
     /** The NPC's own vehicle pawn. */

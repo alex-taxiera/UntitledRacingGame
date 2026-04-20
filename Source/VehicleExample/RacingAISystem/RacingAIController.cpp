@@ -2,6 +2,7 @@
 
 #include "RacingAIController.h"
 #include "RacingSplineComponent.h"
+#include "CourseSplineActor.h"
 #include "NPCRacerData.h"
 #include "VehicleExamplePawn.h"
 #include "ChaosWheeledVehicleMovementComponent.h"
@@ -81,6 +82,12 @@ void ARacingAIController::StartRace()
     ActiveStates.Reset();
     ActiveStates.Add(ERacingAIState::Racing);
 
+    // Initialise lane state to the patrol spline (or racing spline as fallback).
+    // The NPC drives this lane until EvaluateLaneChange() picks a sibling.
+    CurrentLaneSpline  = PatrolSpline ? PatrolSpline : RacingSpline;
+    PreviousLaneSpline = nullptr;
+    LaneBlendAlpha     = 1.0f;
+
     // Wake the physics body immediately so throttle takes effect on frame 1.
     if (OwnPawn && OwnPawn->GetMesh())
     {
@@ -104,6 +111,11 @@ void ARacingAIController::StartIdle()
     bIdleActive = true;
     ActiveStates.Reset();
     ActiveStates.Add(ERacingAIState::Idle);
+
+    // Initialise lane state for patrol mode.
+    CurrentLaneSpline  = PatrolSpline ? PatrolSpline : RacingSpline;
+    PreviousLaneSpline = nullptr;
+    LaneBlendAlpha     = 1.0f;
 }
 
 void ARacingAIController::StopIdle()
@@ -182,6 +194,10 @@ void ARacingAIController::Tick(float DeltaSeconds)  // NOLINT
         TimeSinceLastReaction = 0.0f;
         ReactionTick(DeltaSeconds);
     }
+
+    // Advance the lane-change blend every frame so the transition is smooth
+    // regardless of the reaction tick interval.
+    TickLaneBlend(DeltaSeconds);
 
     // Execute chosen states every frame so inputs stay smooth
     ExecuteState();
@@ -267,6 +283,30 @@ void ARacingAIController::UpdateContext()
         Context.PlayerLateralOffsetCm = 0.0f;
         Context.SplineTangent         = OwnPawn->GetActorForwardVector();
     }
+
+    // --- Current lane spline position ---
+    // Populate CurrentLaneSplineDistance and CurrentLaneLateralOffsetCm from
+    // the lane the NPC is actually driving, which may differ from RacingSpline.
+    if (CurrentLaneSpline && CurrentLaneSpline != RacingSpline)
+    {
+        const FVector OwnLocation        = OwnPawn->GetActorLocation();
+        Context.CurrentLaneSplineDistance = CurrentLaneSpline->GetNearestSplineDistance(OwnLocation);
+        const FVector LanePos             = CurrentLaneSpline->GetLocationAtDistance(
+                                                Context.CurrentLaneSplineDistance);
+        const FVector LaneTangent         = CurrentLaneSpline->GetDirectionAtDistance(
+                                                Context.CurrentLaneSplineDistance);
+        const FVector LaneRight           = FVector::CrossProduct(LaneTangent, FVector::UpVector);
+        Context.CurrentLaneLateralOffsetCm = FVector::DotProduct(OwnLocation - LanePos, LaneRight);
+    }
+    else
+    {
+        // Lane is the same as the reference spline — reuse already-computed values.
+        Context.CurrentLaneSplineDistance  = Context.OwnSplineDistance;
+        Context.CurrentLaneLateralOffsetCm = Context.OwnLateralOffsetCm;
+    }
+
+    // Evaluate whether a lane change is warranted (reaction-tick rate).
+    EvaluateLaneChange();
 }
 
 void ARacingAIController::EvaluateState()
@@ -455,7 +495,11 @@ void ARacingAIController::Execute_Idle()
 {
     if (!OwnPawn) { return; }
 
-    URacingSplineComponent* Spline = PatrolSpline ? PatrolSpline : RacingSpline;
+    // Drive along the current lane spline (may differ from PatrolSpline if a
+    // lane change has occurred).  Fall back to PatrolSpline then RacingSpline.
+    URacingSplineComponent* Spline = CurrentLaneSpline
+                                   ? CurrentLaneSpline
+                                   : (PatrolSpline ? PatrolSpline : RacingSpline);
     if (!Spline) { return; }
 
     // Chaos puts vehicle bodies to sleep when stationary.
@@ -608,39 +652,67 @@ float ARacingAIController::ComputeSplineSteeringInput() const
 
     const FVector PawnForward = OwnPawn->GetActorForwardVector();
 
-    if (RacingSpline)
-    {
-        const FCorneringConfig& Cfg = RacerData
-            ? RacerData->AIConfig.CorneringConfig
-            : FCorneringConfig{};
+    const FCorneringConfig& Cfg = RacerData
+        ? RacerData->AIConfig.CorneringConfig
+        : FCorneringConfig{};
 
-        // --- Component 1: Heading alignment ---
-        // Sample the spline *tangent* at the lookahead point rather than
-        // aiming at the point itself.  This tells the car which *direction*
-        // the track is heading further ahead, giving predictive turn-in for
-        // corners without dragging the car hard sideways when it is off-center
-        // (which is what caused the left-right hunting oscillation).
-        const FVector LookaheadTangent = RacingSpline->GetDirectionAtDistance(
-            Context.OwnSplineDistance + Cfg.SteeringLookaheadCm);
+    // Helper lambda: compute steering for a given spline and distance along it.
+    // Uses the two-component approach: heading (lookahead tangent) + gentle
+    // lateral correction toward lane centre.
+    auto SteerForLane = [&](URacingSplineComponent* Spline,
+                             float LaneDistCm,
+                             float LaneLateralOffsetCm) -> float
+    {
+        if (!Spline) { return 0.0f; }
+
+        // Component 1: heading — sample the tangent SteeringLookaheadCm ahead
+        // on this lane so the car turns in early for corners.
+        const FVector LookaheadTangent = Spline->GetDirectionAtDistance(
+            LaneDistCm + Cfg.SteeringLookaheadCm);
         const float HeadingSteering = FVector::CrossProduct(PawnForward, LookaheadTangent).Z;
 
-        // --- Component 2: Lateral position correction ---
-        // A small proportional nudge toward the spline center so the car
-        // gradually drifts back when it wanders off line.  Using a separate
-        // low-gain signal instead of folding position into the heading avoids
-        // overshooting and oscillation: the car eases to center rather than
-        // snapping hard and overcorrecting.
+        // Component 2: low-gain lateral correction toward the lane centre.
         const float LateralSteering = FMath::Clamp(
-            Context.OwnLateralOffsetCm / FMath::Max(Cfg.LateralCorrectionScaleCm, 1.0f),
+            LaneLateralOffsetCm / FMath::Max(Cfg.LateralCorrectionScaleCm, 1.0f),
             -1.0f, 1.0f);
 
         return FMath::Clamp(
             HeadingSteering + Cfg.LateralCorrectionWeight * LateralSteering,
             -1.0f, 1.0f);
+    };
+
+    // Use CurrentLaneSpline (the lane the NPC is committed to).
+    // Fall back to RacingSpline for backwards compatibility if lane data absent.
+    URacingSplineComponent* ActiveLane = CurrentLaneSpline ? CurrentLaneSpline : RacingSpline;
+    if (!ActiveLane)
+    {
+        return FMath::Clamp(FVector::CrossProduct(PawnForward, Context.SplineTangent).Z, -1.0f, 1.0f);
     }
 
-    // Fallback when no spline is present: align with cached tangent.
-    return FMath::Clamp(FVector::CrossProduct(PawnForward, Context.SplineTangent).Z, -1.0f, 1.0f);
+    const float CurrentResult = SteerForLane(
+        ActiveLane,
+        Context.CurrentLaneSplineDistance,
+        Context.CurrentLaneLateralOffsetCm);
+
+    // During a lane-change blend, interpolate from the previous lane's steering
+    // toward the new lane's steering.  This prevents a sudden snap in heading
+    // as the AI transitions between splines.
+    if (PreviousLaneSpline && LaneBlendAlpha < 1.0f)
+    {
+        // Compute previous-lane distance by projecting own position onto it.
+        const float PrevLaneDist   = PreviousLaneSpline->GetNearestSplineDistance(
+            OwnPawn->GetActorLocation());
+        const FVector PrevLanePos  = PreviousLaneSpline->GetLocationAtDistance(PrevLaneDist);
+        const FVector PrevTangent  = PreviousLaneSpline->GetDirectionAtDistance(PrevLaneDist);
+        const FVector PrevRight    = FVector::CrossProduct(PrevTangent, FVector::UpVector);
+        const float   PrevLateral  = FVector::DotProduct(
+            OwnPawn->GetActorLocation() - PrevLanePos, PrevRight);
+
+        const float PreviousResult = SteerForLane(PreviousLaneSpline, PrevLaneDist, PrevLateral);
+        return FMath::Lerp(PreviousResult, CurrentResult, LaneBlendAlpha);
+    }
+
+    return CurrentResult;
 }
 
 float ARacingAIController::ComputeLateralToPlayer() const
@@ -651,4 +723,136 @@ float ARacingAIController::ComputeLateralToPlayer() const
     const FVector ToPlayer = PlayerPawn->GetActorLocation() - OwnPawn->GetActorLocation();
     const FVector Right    = OwnPawn->GetActorRightVector();
     return FMath::Clamp(FVector::DotProduct(ToPlayer.GetSafeNormal(), Right), -1.0f, 1.0f);
+}
+
+// ---------------------------------------------------------------------------
+// Lane driving
+// ---------------------------------------------------------------------------
+
+void ARacingAIController::TickLaneBlend(float DeltaSeconds)
+{
+    if (!PreviousLaneSpline) { return; }
+
+    const float Duration = RacerData
+        ? RacerData->AIConfig.LaneConfig.LaneChangeDurationSec
+        : 1.5f;
+
+    LaneBlendAlpha += DeltaSeconds / FMath::Max(Duration, KINDA_SMALL_NUMBER);
+    if (LaneBlendAlpha >= 1.0f)
+    {
+        LaneBlendAlpha     = 1.0f;
+        PreviousLaneSpline = nullptr;
+    }
+}
+
+void ARacingAIController::EvaluateLaneChange()
+{
+    // Skip if we are already mid-transition — wait until the blend completes.
+    if (PreviousLaneSpline) { return; }
+    if (!OwnPawn || !CurrentLaneSpline) { return; }
+
+    const FLaneConfig& LaneCfg = RacerData
+        ? RacerData->AIConfig.LaneConfig
+        : FLaneConfig{};
+
+    const FVector OwnLocation  = OwnPawn->GetActorLocation();
+    const FVector OwnForward   = OwnPawn->GetActorForwardVector();
+    const float   SweepRadius  = LaneCfg.ObstacleSweepRadiusCm;
+    const float   LookaheadCm  = LaneCfg.ObstacleLookaheadCm;
+
+    // Build the sweep: a sphere trace along the NPC's forward direction.
+    const FVector SweepStart = OwnLocation;
+    const FVector SweepEnd   = OwnLocation + OwnForward * LookaheadCm;
+
+    FCollisionQueryParams QueryParams;
+    QueryParams.AddIgnoredActor(OwnPawn);
+
+    TArray<FHitResult> Hits;
+    const bool bAnyHit = GetWorld()->SweepMultiByChannel(
+        Hits, SweepStart, SweepEnd,
+        FQuat::Identity,
+        ECollisionChannel::ECC_Pawn,
+        FCollisionShape::MakeSphere(SweepRadius),
+        QueryParams);
+
+    if (!bAnyHit) { return; }
+
+    // Check whether any hit is a vehicle ahead of us on the current lane.
+    bool bLaneBlocked = false;
+    for (const FHitResult& Hit : Hits)
+    {
+        if (!Hit.GetActor()) { continue; }
+        if (!Hit.GetActor()->IsA<AVehicleExamplePawn>()) { continue; }
+
+        // Only consider vehicles that are ahead (not ones we just passed).
+        const FVector ToHit = (Hit.ImpactPoint - OwnLocation);
+        if (FVector::DotProduct(ToHit, OwnForward) > 0.0f)
+        {
+            bLaneBlocked = true;
+            break;
+        }
+    }
+
+    if (!bLaneBlocked) { return; }
+
+    // Find the parent CourseSplineActor to get sibling lanes.
+    ACourseSplineActor* LaneActor = Cast<ACourseSplineActor>(CurrentLaneSpline->GetOwner());
+    if (!LaneActor) { return; }
+
+    TArray<URacingSplineComponent*> AllLanes = LaneActor->GetAllSplines();
+
+    // Score each sibling: count how many vehicles are in its path.
+    URacingSplineComponent* BestLane       = nullptr;
+    int32                    BestHitCount   = INT_MAX;
+    int32                    BestLaneIndex  = -1;
+
+    for (URacingSplineComponent* Candidate : AllLanes)
+    {
+        if (!Candidate || Candidate == CurrentLaneSpline) { continue; }
+
+        // Project NPC's position onto the candidate lane to get its centre.
+        const float   CandDist     = Candidate->GetNearestSplineDistance(OwnLocation);
+        const FVector CandPos      = Candidate->GetLocationAtDistance(CandDist);
+        const FVector CandForward  = Candidate->GetDirectionAtDistance(CandDist);
+
+        // Sweep along candidate lane forward from its equivalent position.
+        const FVector CandStart = CandPos;
+        const FVector CandEnd   = CandPos + CandForward * LookaheadCm;
+
+        TArray<FHitResult> CandHits;
+        GetWorld()->SweepMultiByChannel(
+            CandHits, CandStart, CandEnd,
+            FQuat::Identity,
+            ECollisionChannel::ECC_Pawn,
+            FCollisionShape::MakeSphere(SweepRadius),
+            QueryParams);
+
+        // Count forward obstacles only.
+        int32 HitCount = 0;
+        for (const FHitResult& H : CandHits)
+        {
+            if (!H.GetActor() || !H.GetActor()->IsA<AVehicleExamplePawn>()) { continue; }
+            if (FVector::DotProduct(H.ImpactPoint - CandPos, CandForward) > 0.0f)
+            {
+                ++HitCount;
+            }
+        }
+
+        // Prefer fewer obstacles; tiebreak on higher LaneIndex (rightmost lane).
+        if (HitCount < BestHitCount ||
+            (HitCount == BestHitCount && Candidate->LaneIndex > BestLaneIndex))
+        {
+            BestHitCount  = HitCount;
+            BestLane      = Candidate;
+            BestLaneIndex = Candidate->LaneIndex;
+        }
+    }
+
+    // Only switch if the best candidate is actually clearer than staying put.
+    if (BestLane && BestHitCount < 1)
+    {
+        PreviousLaneSpline = CurrentLaneSpline;
+        CurrentLaneSpline  = BestLane;
+        LaneBlendAlpha     = 0.0f;
+    }
 }
