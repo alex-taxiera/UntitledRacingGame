@@ -12,6 +12,9 @@ ANPCPatrolActor::ANPCPatrolActor()
 {
     PrimaryActorTick.bCanEverTick = true;
 
+    // Replicate to clients so all connected players see NPC vehicles.
+    bReplicates = true;
+
     // Plain scene component as root — the challenge trigger is now distance-based in Tick.
     USceneComponent* Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
     SetRootComponent(Root);

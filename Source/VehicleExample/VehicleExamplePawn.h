@@ -12,6 +12,7 @@ class USpringArmComponent;
 class UInputAction;
 class UChaosWheeledVehicleMovementComponent;
 struct FInputActionValue;
+class SChallengePromptWidget;
 
 /**
  *  Vehicle Pawn class
@@ -108,6 +109,9 @@ public:
 
 	/** Initialization */
 	virtual void BeginPlay() override;
+
+	/** Called on the owning client when this pawn is (re)started — ensures game-only input mode. */
+	virtual void PawnClientRestart() override;
 
 	/** Cleanup */
 	virtual void EndPlay(EEndPlayReason::Type EndPlayReason) override;
@@ -224,4 +228,75 @@ public:
 	FORCEINLINE UCameraComponent* GetBackCamera() const { return BackCamera; }
 	/** Returns the cast Chaos Vehicle Movement subobject */
 	FORCEINLINE const TObjectPtr<UChaosWheeledVehicleMovementComponent>& GetChaosVehicleMovement() const { return ChaosVehicleMovement; }
+
+	// -----------------------------------------------------------------------
+	// Player-vs-Player challenge system
+	// -----------------------------------------------------------------------
+
+	/**
+	 * Radius (cm) within which this pawn detects other player pawns for
+	 * challenge prompts. Default 1500 cm = 15 m, same as NPC challenges.
+	 */
+	UPROPERTY(EditAnywhere, Category = "Challenge")
+	float PlayerChallengeRadius = 1500.f;
+
+	/**
+	 * Send a challenge request to TargetPawn. Callable on the local client;
+	 * routes through the server for validation.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Challenge")
+	void RequestChallengePlayer(AVehicleExamplePawn* TargetPawn);
+
+	/**
+	 * Accept or decline a pending challenge. Callable on the local client;
+	 * routes through the server for authoritative resolution.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Challenge")
+	void RespondToChallenge(bool bAccepted);
+
+	/** The pawn that has sent us a pending challenge request (nullptr if none). */
+	UFUNCTION(BlueprintPure, Category = "Challenge")
+	AVehicleExamplePawn* GetPendingChallenger() const { return PendingChallenger.Get(); }
+
+	/** True while this pawn is waiting for a response to an outgoing challenge. */
+	UFUNCTION(BlueprintPure, Category = "Challenge")
+	bool HasOutgoingChallenge() const { return bHasOutgoingChallenge; }
+
+private:
+
+	// --- Server RPCs ---
+
+	UFUNCTION(Server, Reliable)
+	void Server_RequestChallenge(AVehicleExamplePawn* TargetPawn);
+
+	UFUNCTION(Server, Reliable)
+	void Server_RespondToChallenge(AVehicleExamplePawn* ChallengerPawn, bool bAccepted);
+
+	// --- Client RPCs ---
+
+	/** Delivered to the challenged player so they can show the prompt. */
+	UFUNCTION(Client, Reliable)
+	void Client_ReceiveChallengeRequest(AVehicleExamplePawn* ChallengerPawn);
+
+	/** Delivered to both participants when the challenge is resolved. */
+	UFUNCTION(Client, Reliable)
+	void Client_OnChallengeAccepted(AVehicleExamplePawn* OpponentPawn);
+
+	/** Delivered to the challenger if their target declines. */
+	UFUNCTION(Client, Reliable)
+	void Client_OnChallengeDeclined();
+
+	// --- State ---
+
+	/** The pawn that has challenged us (set on the challenged player's pawn). */
+	UPROPERTY()
+	TWeakObjectPtr<AVehicleExamplePawn> PendingChallenger;
+
+	bool bHasOutgoingChallenge = false;
+
+	/** Shows a player challenge prompt in the viewport on this client. */
+	void ShowPlayerChallengePrompt(AVehicleExamplePawn* ChallengerPawn);
+	void HidePlayerChallengePrompt();
+
+	TSharedPtr<class SChallengePromptWidget> PlayerChallengeWidget;
 };

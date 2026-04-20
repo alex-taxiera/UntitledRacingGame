@@ -11,7 +11,7 @@
 
 /**
  * The set of states the NPC racing AI state machine can occupy.
- * Multiple states can be active simultaneously where noted — the controller
+ * Multiple states can be active simultaneously where noted ï¿½ the controller
  * layers them (e.g. Cornering modifies throttle on top of any other state).
  */
 UENUM(BlueprintType)
@@ -52,7 +52,7 @@ enum class ERacingAIState : uint8
 
     /**
      * Reduces throttle and steers toward the racing line apex.
-     * Applied as a modifier layer on top of the base state — does not
+     * Applied as a modifier layer on top of the base state ï¿½ does not
      * replace it, but overrides throttle and steering while active.
      */
     Cornering           UMETA(DisplayName = "Cornering"),
@@ -70,7 +70,7 @@ enum class ERacingAIState : uint8
 UENUM(BlueprintType)
 enum class EAIBehaviorCondition : uint8
 {
-    /** Always eligible — rule is evaluated every tick. */
+    /** Always eligible ï¿½ rule is evaluated every tick. */
     Always              UMETA(DisplayName = "Always"),
 
     /** NPC is trailing the player by at least DistanceThreshold. */
@@ -85,10 +85,10 @@ enum class EAIBehaviorCondition : uint8
     /** Player is within DistanceThreshold ahead of the NPC (close approach). */
     PlayerCloseAhead    UMETA(DisplayName = "Player Close Ahead"),
 
-    /** NPC's nitro is above NitroThreshold (0–1 fraction). */
+    /** NPC's nitro is above NitroThreshold (0ï¿½1 fraction). */
     NitroAvailable      UMETA(DisplayName = "Nitro Available"),
 
-    /** NPC's nitro is below NitroThreshold (0–1 fraction). */
+    /** NPC's nitro is below NitroThreshold (0ï¿½1 fraction). */
     NitroLow            UMETA(DisplayName = "Nitro Low"),
 
     /** NPC's current speed is below SpeedThreshold (km/h). */
@@ -122,7 +122,7 @@ struct FNitroUsageRule
     float DistanceThreshold = 1000.0f;
 
     /**
-     * Nitro fraction threshold (0–1) used by NitroAvailable / NitroLow conditions.
+     * Nitro fraction threshold (0ï¿½1) used by NitroAvailable / NitroLow conditions.
      * Ignored for non-nitro conditions.
      */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NitroRule",
@@ -130,7 +130,7 @@ struct FNitroUsageRule
     float NitroThreshold = 0.5f;
 
     /**
-     * Probability (0–1) that the NPC activates nitro when this condition is met.
+     * Probability (0ï¿½1) that the NPC activates nitro when this condition is met.
      * Evaluated once per reevaluation interval, not every frame.
      */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NitroRule",
@@ -186,7 +186,7 @@ struct FAggressionBehaviorRule
     float SpeedThreshold = 1000.0f;
 
     /**
-     * Probability (0–1) of activating this behavior when the condition is met.
+     * Probability (0ï¿½1) of activating this behavior when the condition is met.
      * Rolled once per reevaluation interval.
      */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "BehaviorRule",
@@ -209,7 +209,7 @@ struct FAggressionBehaviorRule
     float CooldownSeconds = 4.0f;
 
     /**
-     * Steering intensity applied when executing this behavior (0–1).
+     * Steering intensity applied when executing this behavior (0ï¿½1).
      * 1.0 = full steering input toward the target; lower values = gentler move.
      * Relevant for Bumping and BlockingSlowDrift.
      */
@@ -218,7 +218,7 @@ struct FAggressionBehaviorRule
     float SteeringIntensity = 0.6f;
 
     /**
-     * Throttle reduction applied during this behavior (0–1, where 0 = no reduction).
+     * Throttle reduction applied during this behavior (0ï¿½1, where 0 = no reduction).
      * Relevant for BlockingSlowDrift.
      */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "BehaviorRule",
@@ -241,7 +241,7 @@ struct FCorneringConfig
     /**
      * Distance in cm ahead to scan for corners.
      * Must be large enough for the car to brake. At 100 km/h braking at ~1g,
-     * stopping distance is ~40 m — keep this above 5000 cm.
+     * stopping distance is ~40 m ï¿½ keep this above 5000 cm.
      */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cornering",
         meta = (ClampMin = "100.0"))
@@ -257,9 +257,9 @@ struct FCorneringConfig
     float CurvatureThreshold = 0.0003f;
 
     /**
-     * Maximum lateral acceleration the car can sustain (cm/s²).
+     * Maximum lateral acceleration the car can sustain (cm/sï¿½).
      * Physics-based max corner speed = sqrt(AILateralAccelCmS2 / curvature).
-     * 900 cm/s² (~0.9g) is a good starting point for the sports car.
+     * 900 cm/sï¿½ (~0.9g) is a good starting point for the sports car.
      */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cornering",
         meta = (ClampMin = "100.0"))
@@ -279,6 +279,37 @@ struct FCorneringConfig
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cornering",
         meta = (ClampMin = "0.0", ClampMax = "1.0"))
     float SplineFollowStrength = 0.85f;
+
+    /**
+     * Distance (cm) ahead on the spline used to sample the spline tangent for
+     * steering.  The car aligns its heading toward where the track is *going*
+     * at this lookahead distance, giving predictive turn-in for corners.
+     * 800-1500 cm works well at typical race speeds (~80-120 km/h).
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cornering",
+        meta = (ClampMin = "50.0"))
+    float SteeringLookaheadCm = 900.0f;
+
+    /**
+     * Lateral offset (cm) at which the lateral-correction signal reaches its
+     * maximum contribution.  At offsets smaller than this the correction is
+     * proportionally smaller, so the car eases back to center rather than
+     * snapping hard toward the line.  ~500-800 cm (5-8 m) is a good range;
+     * increase to make the car more tolerant of being off-center.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cornering",
+        meta = (ClampMin = "50.0"))
+    float LateralCorrectionScaleCm = 600.0f;
+
+    /**
+     * How much the lateral-correction signal is blended into the final steering
+     * output (0-1).  Keep this low (0.2-0.35) to avoid oscillation: the
+     * heading component already steers toward the line; this just provides a
+     * gentle nudge when the car is significantly off center.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cornering",
+        meta = (ClampMin = "0.0", ClampMax = "1.0"))
+    float LateralCorrectionWeight = 0.25f;
 };
 
 // ---------------------------------------------------------------------------
@@ -313,7 +344,7 @@ struct FAIDifficultyOverride
     float AggressionMultiplier = 1.0f;
 
     /**
-     * Additional top speed bonus applied as a fraction of max speed (0–1).
+     * Additional top speed bonus applied as a fraction of max speed (0ï¿½1).
      * Stacks with rubber-band; use to make higher difficulties genuinely faster.
      */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Difficulty",
@@ -330,7 +361,7 @@ struct FAIDifficultyOverride
  * Embedded in UNPCRacerData so it lives in the same Data Asset.
  *
  * Global settings affect all behavior.  Per-NPC difficulty overrides stack on
- * top of the global difficulty setting applied by the game mode — so each NPC
+ * top of the global difficulty setting applied by the game mode ï¿½ so each NPC
  * can be individually more or less reactive regardless of difficulty.
  */
 USTRUCT(BlueprintType)
@@ -373,7 +404,7 @@ struct FRacingAIConfig
     float ReactionTimeSeconds = 0.25f;
 
     /**
-     * Global aggression scale applied to all behavior rule probabilities (0–1).
+     * Global aggression scale applied to all behavior rule probabilities (0ï¿½1).
      * Set to 0 for a purely passive NPC; 1 for maximum use of all rules.
      */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Global",
@@ -393,7 +424,7 @@ struct FRacingAIConfig
     float RubberBandActivationDistanceCm = 3000.0f;
 
     /**
-     * Maximum additional throttle fraction (0–1) granted by rubber-band.
+     * Maximum additional throttle fraction (0ï¿½1) granted by rubber-band.
      * Applied linearly from 0 at activation distance to full bonus at 2x that distance.
      */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|RubberBand",

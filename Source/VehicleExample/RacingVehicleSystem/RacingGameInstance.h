@@ -8,6 +8,8 @@
 #include "PlayerPerkManager.h"
 #include "PerkData.h"
 #include "RacingSaveGame.h"
+#include "Interfaces/OnlineSessionInterface.h"
+#include "OnlineSessionSettings.h"
 #include "RacingGameInstance.generated.h"
 
 /**
@@ -18,7 +20,7 @@
  *
  * Owns the UVehicleInventory which persists across level loads.
  * The AllVehicles catalogue is set via the Blueprint defaults of the
- * GameInstance asset — simply add UVehicleDefinition Data Assets to the
+ * GameInstance asset ï¿½ simply add UVehicleDefinition Data Assets to the
  * array exposed on the VehicleInventory property.
  *
  * Save/Load stubs are provided here; wire them into your save system when ready.
@@ -35,7 +37,7 @@ public:
     // -----------------------------------------------------------------------
     // Designer-populated catalogues
     // Set these in Project Settings once RacingGameInstance is the Game
-    // Instance Class — they appear under "Racing" in the class defaults.
+    // Instance Class ï¿½ they appear under "Racing" in the class defaults.
     // -----------------------------------------------------------------------
 
     /**
@@ -121,14 +123,14 @@ public:
 
     /**
      * Starts a fresh game: resets all state and opens the game level.
-     * Does NOT delete any existing save — call DeleteSave() first if needed.
+     * Does NOT delete any existing save ï¿½ call DeleteSave() first if needed.
      */
     UFUNCTION(BlueprintCallable, Category = "Racing")
     void StartNewGame();
 
     /**
      * Loads the existing save then opens the game level.
-     * No-op if no save exists — the title screen should hide this button in that case.
+     * No-op if no save exists ï¿½ the title screen should hide this button in that case.
      */
     UFUNCTION(BlueprintCallable, Category = "Racing")
     void ContinueGame();
@@ -143,7 +145,7 @@ public:
 
     /**
      * Resets in-memory state and returns to the title screen level.
-     * Does NOT delete the save file — progress is preserved.
+     * Does NOT delete the save file ï¿½ progress is preserved.
      * Called by the hub System menu "Return to Title" button.
      */
     UFUNCTION(BlueprintCallable, Category = "Racing")
@@ -157,7 +159,7 @@ private:
 public:
 
     // -----------------------------------------------------------------------
-    // Level Names — set these in the Blueprint subclass class defaults
+    // Level Names ï¿½ set these in the Blueprint subclass class defaults
     // -----------------------------------------------------------------------
 
     /** The hub / garage level opened by StartNewGame and ContinueGame. */
@@ -171,4 +173,77 @@ public:
     /** The title screen level opened by ReturnToTitle. */
     UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Racing|Levels")
     FName TitleLevelName = TEXT("TitleScreen");
+
+    // -----------------------------------------------------------------------
+    // Multiplayer / Session management
+    // -----------------------------------------------------------------------
+
+    /**
+     * Maximum players allowed in one course session.
+     * Set in the Blueprint subclass defaults (BP_RacingGameInstance).
+     */
+    UPROPERTY(EditDefaultsOnly, Category = "Racing|Multiplayer")
+    int32 MaxPlayersPerSession = 8;
+
+    /**
+     * Creates a LAN session for the course map. Call this server-side from
+     * ACourseGameMode::BeginPlay() so joining clients can discover it.
+     */
+    void HostCourseSession();
+
+    /**
+     * Searches the LAN for active course sessions.
+     * Fires OnSessionsFound when the search completes (success or not).
+     */
+    void FindCourseSessions();
+
+    /**
+     * Joins the first session found by FindCourseSessions and performs a
+     * client travel to that server's course map.
+     * Must be called after OnSessionsFound fires with bWasSuccessful = true.
+     */
+    void JoinFirstFoundSession();
+
+    /** True while a LAN session search is running. */
+    bool IsSearchingForSession() const { return bSearchingForSession; }
+
+    // -----------------------------------------------------------------------
+    // Save profile / slot management
+    // -----------------------------------------------------------------------
+
+    /**
+     * The save slot currently in use for all save/load/delete operations.
+     * Defaults to "RacingSave" (slot 1).  Set via SetActiveSaveSlot() or the
+     * -SaveSlot=<Name> command-line argument at startup.
+     */
+    const FString& GetActiveSaveSlot() const { return ActiveSaveSlot; }
+
+    /** Switch to a different save slot.  Does not load the new slot automatically. */
+    void SetActiveSaveSlot(const FString& NewSlot)
+    {
+        ActiveSaveSlot = NewSlot.IsEmpty() ? URacingSaveGame::SlotName : NewSlot;
+    }
+
+    /**
+     * Fired when FindCourseSessions completes.
+     * bool param = true if at least one session was found.
+     * Bind this in SGaragePanel / SHubRootWidget to update the UI.
+     */
+    DECLARE_MULTICAST_DELEGATE_OneParam(FOnSessionsFound, bool /*bSuccess*/);
+    FOnSessionsFound OnSessionsFound;
+
+private:
+
+    /** Active save slot name â€” all save/load ops use this. */
+    FString ActiveSaveSlot = URacingSaveGame::SlotName;
+
+    bool bSearchingForSession = false;
+
+    TSharedPtr<FOnlineSessionSearch> SessionSearch;
+
+    void OnCreateSessionComplete(FName SessionName, bool bWasSuccessful);
+    void OnFindSessionsComplete(bool bWasSuccessful);
+    void OnJoinSessionComplete(FName SessionName, EOnJoinSessionCompleteResult::Type Result);
+
+    IOnlineSessionPtr GetSessionInterface() const;
 };

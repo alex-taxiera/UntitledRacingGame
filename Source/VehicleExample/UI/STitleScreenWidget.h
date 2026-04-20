@@ -68,6 +68,7 @@ private:
     FReply OnConfirmDeleteClicked();
     FReply OnCancelDeleteClicked();
     FReply OnExitClicked();
+    FReply OnSlotClicked(FString SlotName);
 
     // -----------------------------------------------------------------------
     // Attribute bindings
@@ -84,6 +85,12 @@ private:
 
     /** Main button column visibility (hidden while confirm overlay is shown). */
     EVisibility GetMainButtonsVisibility() const;
+
+    /** Tint for a profile slot button — highlighted when it is the active slot. */
+    FSlateColor GetSlotButtonColor(const FString& SlotName) const;
+    FSlateColor GetSlot1Color() const { return GetSlotButtonColor(TEXT("RacingSave")); }
+    FSlateColor GetSlot2Color() const { return GetSlotButtonColor(TEXT("RacingSave2")); }
+    FSlateColor GetSlot3Color() const { return GetSlotButtonColor(TEXT("RacingSave3")); }
 
     // -----------------------------------------------------------------------
     // Style helpers

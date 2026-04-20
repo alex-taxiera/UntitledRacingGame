@@ -76,6 +76,14 @@ void ACourseGameMode::BeginPlay()
 
     UE_LOG(LogTemp, Warning, TEXT("=== CourseGameMode::BeginPlay ==="));
 
+    // Advertise a LAN session so Hub clients can discover and join this course.
+    // Only the server/authority creates the session.
+    if (GetNetMode() != NM_Client)
+    {
+        URacingGameInstance* GI = URacingGameInstance::Get(this);
+        if (GI) { GI->HostCourseSession(); }
+    }
+
     // Explicitly restore game input in case UIOnly mode carried over from hub.
     APlayerController* PC = GetWorld()->GetFirstPlayerController();
     if (PC)
@@ -755,4 +763,117 @@ void ACourseGameMode::LogVehicleDiagnostics()
     }
 
     UE_LOG(LogTemp, Warning, TEXT("===== END DIAG ====="));
+}
+
+// ---------------------------------------------------------------------------
+// Multiplayer: PostLogin / Logout
+// ---------------------------------------------------------------------------
+
+void ACourseGameMode::Logout(AController* Exiting)
+{
+    // Destroy the departing player's pawn before the controller is unregistered
+    // so it doesn't linger as a driverless ghost in the world.
+    if (APawn* Pawn = Exiting ? Exiting->GetPawn() : nullptr)
+    {
+        Pawn->Destroy();
+    }
+
+    Super::Logout(Exiting);
+}
+
+void ACourseGameMode::PostLogin(APlayerController* NewPlayer)
+{
+    Super::PostLogin(NewPlayer);
+
+    // The first player (host / first connection) is already handled by the
+    // default RestartPlayer flow. Only re-position players that join later.
+    // We give the engine one tick to finish spawning the pawn, then teleport.
+    if (GetWorld()->GetNumPlayerControllers() <= 1) { return; }
+
+    // Apply game-only input on the new connection
+    NewPlayer->SetInputMode(FInputModeGameOnly());
+    NewPlayer->bShowMouseCursor = false;
+
+    // Defer one tick so the pawn is fully spawned before we move it.
+    FTimerHandle Dummy;
+    GetWorldTimerManager().SetTimerForNextTick([this, NewPlayer]()
+    {
+        APawn* Pawn = NewPlayer ? NewPlayer->GetPawn() : nullptr;
+        if (!Pawn) { return; }
+
+        // Pass NewPlayer so the centroid is built from pre-existing players only —
+        // the joining player is already at PlayerStart and would skew the result.
+        const FTransform SpawnT = GetSpawnTransformForJoiningPlayer(NewPlayer);
+        Pawn->TeleportTo(SpawnT.GetLocation(), SpawnT.GetRotation().Rotator(), false, true);
+    });
+}
+
+FTransform ACourseGameMode::GetSpawnTransformForJoiningPlayer(APlayerController* ExcludePC) const
+{
+    // 1. Collect existing player pawn locations, skipping the joining player.
+    //    The joining player was just spawned at PlayerStart by Super::PostLogin;
+    //    including them would drag the centroid toward PlayerStart.
+    TArray<FVector> ExistingLocations;
+    for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+    {
+        APlayerController* PC = It->Get();
+        if (!PC || PC == ExcludePC) { continue; }
+        if (PC->GetPawn())
+        {
+            ExistingLocations.Add(PC->GetPawn()->GetActorLocation());
+        }
+    }
+
+    // 2. Find the best spline and a point on it close to the centroid of existing players
+    ACourseSplineActor* SplineActor = FindCourseSplineActor();
+    URacingSplineComponent* BestSpline = SplineActor ? SplineActor->GetRandomSpline() : nullptr;
+
+    FVector Centroid = FVector::ZeroVector;
+    if (ExistingLocations.Num() > 0)
+    {
+        for (const FVector& Loc : ExistingLocations) { Centroid += Loc; }
+        Centroid /= static_cast<float>(ExistingLocations.Num());
+
+        // Pick the spline whose nearest point is closest to the centroid
+        if (SplineActor)
+        {
+            float BestDist = FLT_MAX;
+            for (URacingSplineComponent* Spline : TInlineComponentArray<URacingSplineComponent*>(SplineActor))
+            {
+                if (!Spline) { continue; }
+                const float SplineDist = Spline->GetNearestSplineDistance(Centroid);
+                const FVector NearestPt = Spline->GetLocationAtDistance(SplineDist);
+                const float D = FVector::Dist(Centroid, NearestPt);
+                if (D < BestDist)
+                {
+                    BestDist   = D;
+                    BestSpline = Spline;
+                }
+            }
+        }
+    }
+
+    if (!BestSpline)
+    {
+        // Fallback: find first PlayerStart
+        for (TActorIterator<APlayerStart> It(GetWorld()); It; ++It)
+        {
+            return It->GetActorTransform();
+        }
+        return FTransform::Identity;
+    }
+
+    // 3. Project the centroid onto the chosen spline
+    const float SplineDist  = BestSpline->GetNearestSplineDistance(
+        Centroid.IsNearlyZero() ? BestSpline->GetLocationAtDistance(0.f) : Centroid);
+    const FVector SplinePt  = BestSpline->GetLocationAtDistance(SplineDist);
+    const FVector Tangent   = BestSpline->GetDirectionAtDistance(SplineDist);
+    const FVector Right     = FVector::CrossProduct(Tangent, FVector::UpVector).GetSafeNormal();
+
+    // Offset perpendicular to the spline so the joining player doesn't overlap an existing one
+    const float SideOffset  = 400.f; // ~4 metres
+    const FVector SpawnLoc  = SplinePt + Right * SideOffset + FVector(0.f, 0.f, NPCSpawnZOffset);
+    const FRotator SpawnRot = Tangent.Rotation();
+
+    return FTransform(SpawnRot, SpawnLoc);
 }

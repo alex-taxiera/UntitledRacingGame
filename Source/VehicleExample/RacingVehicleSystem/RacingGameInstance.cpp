@@ -6,6 +6,9 @@
 #include "RacingSaveGame.h"
 #include "OwnedVehicle.h"
 #include "VehicleDefinition.h"
+#include "OnlineSubsystem.h"
+#include "OnlineSessionSettings.h"
+#include "Misc/CommandLine.h"
 
 const int32 URacingGameInstance::StartingCurrency = 10000000;
 
@@ -16,6 +19,14 @@ URacingGameInstance::URacingGameInstance()
 void URacingGameInstance::Init()
 {
     Super::Init();
+
+    // Apply -SaveSlot=<Name> command-line override if provided.
+    FString CmdSlot;
+    if (FParse::Value(FCommandLine::Get(), TEXT("SaveSlot="), CmdSlot) && !CmdSlot.IsEmpty())
+    {
+        ActiveSaveSlot = CmdSlot;
+        UE_LOG(LogTemp, Log, TEXT("URacingGameInstance::Init — save slot set from command line: '%s'"), *ActiveSaveSlot);
+    }
 
     VehicleInventory = NewObject<UVehicleInventory>(this, TEXT("VehicleInventory"));
     VehicleInventory->AllVehicles = AllVehicles;
@@ -38,7 +49,7 @@ URacingGameInstance* URacingGameInstance::Get(const UObject* WorldContextObject)
 
 bool URacingGameInstance::HasSaveGame() const
 {
-    return URacingSaveGame::DoesSaveExist();
+    return UGameplayStatics::DoesSaveGameExist(ActiveSaveSlot, URacingSaveGame::UserIndex);
 }
 
 void URacingGameInstance::SaveGame()
@@ -87,7 +98,7 @@ void URacingGameInstance::SaveGame()
         }
     }
 
-    UGameplayStatics::SaveGameToSlot(Save, URacingSaveGame::SlotName, URacingSaveGame::UserIndex);
+    UGameplayStatics::SaveGameToSlot(Save, ActiveSaveSlot, URacingSaveGame::UserIndex);
 }
 
 void URacingGameInstance::LoadGame()
@@ -95,7 +106,7 @@ void URacingGameInstance::LoadGame()
     if (!HasSaveGame()) { return; }
 
     URacingSaveGame* Save = Cast<URacingSaveGame>(
-        UGameplayStatics::LoadGameFromSlot(URacingSaveGame::SlotName, URacingSaveGame::UserIndex));
+        UGameplayStatics::LoadGameFromSlot(ActiveSaveSlot, URacingSaveGame::UserIndex));
 
     if (!Save) { return; }
 
@@ -162,7 +173,7 @@ void URacingGameInstance::LoadGame()
 
 void URacingGameInstance::DeleteSave()
 {
-    UGameplayStatics::DeleteGameInSlot(URacingSaveGame::SlotName, URacingSaveGame::UserIndex);
+    UGameplayStatics::DeleteGameInSlot(ActiveSaveSlot, URacingSaveGame::UserIndex);
 
     // Reset in-memory state to defaults
     VehicleInventory->PlayerCurrency = 0;
@@ -206,7 +217,8 @@ void URacingGameInstance::ContinueGame()
 void URacingGameInstance::StartCourse()
 {
     SaveGame();
-    UGameplayStatics::OpenLevel(this, CourseLevelName);
+    // Open as a listen server so other players on the LAN can discover and join.
+    UGameplayStatics::OpenLevel(this, CourseLevelName, true, TEXT("?listen"));
 }
 
 void URacingGameInstance::ReturnToTitle()
@@ -229,5 +241,132 @@ void URacingGameInstance::ReturnToTitle()
         }
     }
     UGameplayStatics::OpenLevel(this, TitleLevelName);
+}
+
+// ---------------------------------------------------------------------------
+// Multiplayer / Session management
+// ---------------------------------------------------------------------------
+
+static const FName CourseSessionName = TEXT("CourseSession");
+
+IOnlineSessionPtr URacingGameInstance::GetSessionInterface() const
+{
+    IOnlineSubsystem* OSS = IOnlineSubsystem::Get();
+    return OSS ? OSS->GetSessionInterface() : nullptr;
+}
+
+void URacingGameInstance::HostCourseSession()
+{
+    IOnlineSessionPtr Sessions = GetSessionInterface();
+    if (!Sessions.IsValid()) { return; }
+
+    // Destroy any leftover session from a previous run before creating a new one.
+    if (Sessions->GetNamedSession(CourseSessionName))
+    {
+        Sessions->DestroySession(CourseSessionName);
+    }
+
+    FOnlineSessionSettings Settings;
+    Settings.bIsLANMatch           = true;
+    Settings.NumPublicConnections  = MaxPlayersPerSession;
+    Settings.bShouldAdvertise      = true;
+    Settings.bAllowJoinInProgress  = true;
+    Settings.bUsesPresence         = false;
+    Settings.bAllowInvites         = false;
+
+    Sessions->OnCreateSessionCompleteDelegates.AddUObject(
+        this, &URacingGameInstance::OnCreateSessionComplete);
+
+    Sessions->CreateSession(0, CourseSessionName, Settings);
+}
+
+void URacingGameInstance::OnCreateSessionComplete(FName SessionName, bool bWasSuccessful)
+{
+    IOnlineSessionPtr Sessions = GetSessionInterface();
+    if (Sessions.IsValid())
+    {
+        Sessions->ClearOnCreateSessionCompleteDelegates(this);
+    }
+    UE_LOG(LogTemp, Log, TEXT("URacingGameInstance::OnCreateSessionComplete — %s: %s"),
+        *SessionName.ToString(), bWasSuccessful ? TEXT("OK") : TEXT("FAILED"));
+}
+
+void URacingGameInstance::FindCourseSessions()
+{
+    IOnlineSessionPtr Sessions = GetSessionInterface();
+    if (!Sessions.IsValid() || bSearchingForSession) { return; }
+
+    bSearchingForSession = true;
+
+    SessionSearch = MakeShareable(new FOnlineSessionSearch());
+    SessionSearch->bIsLanQuery      = true;
+    SessionSearch->MaxSearchResults = 16;
+
+    Sessions->OnFindSessionsCompleteDelegates.AddUObject(
+        this, &URacingGameInstance::OnFindSessionsComplete);
+
+    Sessions->FindSessions(0, SessionSearch.ToSharedRef());
+}
+
+void URacingGameInstance::OnFindSessionsComplete(bool bWasSuccessful)
+{
+    IOnlineSessionPtr Sessions = GetSessionInterface();
+    if (Sessions.IsValid())
+    {
+        Sessions->ClearOnFindSessionsCompleteDelegates(this);
+    }
+
+    bSearchingForSession = false;
+
+    const int32 NumFound = (bWasSuccessful && SessionSearch.IsValid())
+        ? SessionSearch->SearchResults.Num() : 0;
+
+    UE_LOG(LogTemp, Log, TEXT("URacingGameInstance::OnFindSessionsComplete — found %d session(s)"),
+        NumFound);
+
+    OnSessionsFound.Broadcast(NumFound > 0);
+}
+
+void URacingGameInstance::JoinFirstFoundSession()
+{
+    IOnlineSessionPtr Sessions = GetSessionInterface();
+    if (!Sessions.IsValid()) { return; }
+    if (!SessionSearch.IsValid() || SessionSearch->SearchResults.Num() == 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("URacingGameInstance::JoinFirstFoundSession — no results"));
+        return;
+    }
+
+    Sessions->OnJoinSessionCompleteDelegates.AddUObject(
+        this, &URacingGameInstance::OnJoinSessionComplete);
+
+    Sessions->JoinSession(0, CourseSessionName, SessionSearch->SearchResults[0]);
+}
+
+void URacingGameInstance::OnJoinSessionComplete(FName SessionName,
+                                                EOnJoinSessionCompleteResult::Type Result)
+{
+    IOnlineSessionPtr Sessions = GetSessionInterface();
+    if (Sessions.IsValid())
+    {
+        Sessions->ClearOnJoinSessionCompleteDelegates(this);
+    }
+
+    if (Result != EOnJoinSessionCompleteResult::Success)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("URacingGameInstance::OnJoinSessionComplete — failed (%d)"),
+            static_cast<int32>(Result));
+        return;
+    }
+
+    FString TravelURL;
+    if (Sessions->GetResolvedConnectString(SessionName, TravelURL))
+    {
+        APlayerController* PC = GetFirstLocalPlayerController();
+        if (PC)
+        {
+            PC->ClientTravel(TravelURL, ETravelType::TRAVEL_Absolute);
+        }
+    }
 }
 

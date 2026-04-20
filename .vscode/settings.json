@@ -12,5 +12,12 @@
     "titleBar.inactiveBackground": "#ff3d0099",
     "titleBar.inactiveForeground": "#e7e7e799"
   },
-  "peacock.color": "#ff3d00"
+  "peacock.color": "#ff3d00",
+  "chat.tools.terminal.autoApprove": {
+    "/^Start-Process -FilePath \"G:\\\\EpicGames\\\\UE_5\\.7\\\\Engine\\\\Build\\\\BatchFiles\\\\Build\\.bat\" `\n    -ArgumentList \"VehicleExampleEditor\", \"Win64\", \"Development\", `\n        \"`\"C:\\\\Users\\\\Alex\\\\Documents\\\\Unreal Projects\\\\VehicleExample\\\\VehicleExample\\.uproject`\"\" `\n    -Wait -NoNewWindow `\n    -RedirectStandardOutput \"\\$env:TEMP\\\\ue_build_out\\.txt\" `\n    -RedirectStandardError  \"\\$env:TEMP\\\\ue_build_err\\.txt\"\n\nGet-Content \"\\$env:TEMP\\\\ue_build_out\\.txt\" \\| Select-String \"error C\\|error LNK\\|fatal error\\|Result:\"$/": {
+      "approve": true,
+      "matchCommandLine": true
+    },
+    "Start-Process": true
+  }
 }

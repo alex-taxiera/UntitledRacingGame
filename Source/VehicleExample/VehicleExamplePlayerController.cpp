@@ -104,6 +104,16 @@ void AVehicleExamplePlayerController::OnPossess(APawn* InPawn)
 	VehiclePawn->OnDestroyed.AddDynamic(this, &AVehicleExamplePlayerController::OnPawnDestroyed);
 }
 
+void AVehicleExamplePlayerController::AcknowledgePossession(APawn* P)
+{
+	Super::AcknowledgePossession(P);
+
+	// OnPossess only fires server-side.  AcknowledgePossession is called on the
+	// owning client when the server confirms possession, so this is where we set
+	// up client-only state that depends on knowing which pawn we control.
+	VehiclePawn = Cast<AVehicleExamplePawn>(P);
+}
+
 void AVehicleExamplePlayerController::OnPawnDestroyed(AActor* DestroyedPawn)
 {
 	// find the player start

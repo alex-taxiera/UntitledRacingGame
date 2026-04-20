@@ -15,11 +15,22 @@
 #include "RacingVehicleSystem/RacingGameInstance.h"
 #include "RacingVehicleSystem/VehicleInventory.h"
 #include "RacingVehicleSystem/OwnedVehicle.h"
+#include "SChallengePromptWidget.h"
+#include "Engine/GameViewportClient.h"
+#include "Net/UnrealNetwork.h"
 
 #define LOCTEXT_NAMESPACE "VehiclePawn"
 
 AVehicleExamplePawn::AVehicleExamplePawn()
 {
+	// Replicate this pawn to all clients so every player sees every vehicle.
+	bReplicates = true;
+	SetReplicatingMovement(true);
+
+	// Send position updates at 60 Hz so simulated proxies see smooth movement.
+	NetUpdateFrequency    = 60.f;
+	MinNetUpdateFrequency = 30.f;
+
 	// construct the front camera boom
 	FrontSpringArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("Front Spring Arm"));
 	FrontSpringArm->SetupAttachment(GetMesh());
@@ -99,6 +110,19 @@ void AVehicleExamplePawn::BeginPlay()
 {
 	Super::BeginPlay();
 
+	// Simulated proxies that are NOT locally controlled (i.e. NPC pawns and other
+	// players' cars seen from a remote client) must not run local Chaos physics.
+	// Their position is driven by the replicated transform.  Without this, the
+	// AI's constant steering input causes the NPC pawn's local simulation to
+	// diverge from the server state and snap visibly.
+	// The joining player's own pawn is ROLE_AutonomousProxy, not SimulatedProxy,
+	// so this block does not affect it.
+	if (GetLocalRole() == ROLE_SimulatedProxy)
+	{
+		GetMesh()->SetSimulatePhysics(false);
+		return;
+	}
+
 	// set up the flipped check timer
 	GetWorld()->GetTimerManager().SetTimer(FlipCheckTimer, this, &AVehicleExamplePawn::FlippedCheck, FlipCheckTime, true);
 
@@ -122,6 +146,21 @@ void AVehicleExamplePawn::BeginPlay()
 	});
 }
 
+void AVehicleExamplePawn::PawnClientRestart()
+{
+	Super::PawnClientRestart();
+
+	// SetInputMode called in ACourseGameMode::PostLogin runs on the server's proxy
+	// of the joining controller and never reaches the actual client.  Call it here
+	// on the owning client so vehicle input works immediately after possession.
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	if (PC && PC->IsLocalController())
+	{
+		PC->SetInputMode(FInputModeGameOnly());
+		PC->bShowMouseCursor = false;
+	}
+}
+
 void AVehicleExamplePawn::EndPlay(EEndPlayReason::Type EndPlayReason)
 {
 	// clear the flipped check timer
@@ -134,6 +173,9 @@ void AVehicleExamplePawn::Tick(float Delta)
 {
 	Super::Tick(Delta);
 
+	// SimulatedProxy pawns have no local physics or input — skip all gameplay logic.
+	if (GetLocalRole() == ROLE_SimulatedProxy) { return; }
+
 	// add some angular damping if the vehicle is in midair
 	bool bMovingOnGround = ChaosVehicleMovement->IsMovingOnGround();
 	GetMesh()->SetAngularDamping(bMovingOnGround ? 0.0f : 3.0f);
@@ -141,8 +183,36 @@ void AVehicleExamplePawn::Tick(float Delta)
 	// realign the camera yaw to face front
 	float CameraYaw = BackSpringArm->GetRelativeRotation().Yaw;
 	CameraYaw = FMath::FInterpTo(CameraYaw, 0.0f, Delta, 1.0f);
-
 	BackSpringArm->SetRelativeRotation(FRotator(0.0f, CameraYaw, 0.0f));
+
+	// PvP proximity challenge: scan for nearby player pawns and auto-request a
+	// challenge when one enters the radius.  Only runs on human-controlled pawns
+	// (AI controllers also satisfy IsLocallyControlled on the server, so we must
+	// explicitly require a PlayerController to avoid NPC pawns triggering this).
+	if (IsLocallyControlled() && Cast<APlayerController>(GetController())
+		&& !bHasOutgoingChallenge && !PendingChallenger.IsValid())
+	{
+		for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+		{
+			APlayerController* OtherPC = It->Get();
+			if (!OtherPC) { continue; }
+
+			AVehicleExamplePawn* OtherPawn = Cast<AVehicleExamplePawn>(OtherPC->GetPawn());
+			if (!OtherPawn || OtherPawn == this) { continue; }
+			// Only challenge pawns that are also locally controlled from this client's
+			// perspective (i.e. this is the server iterating its controllers).
+			// On the listen-server host both controllers exist locally, so we use
+			// HasAuthority() as the guard — only the server initiates the RPC.
+			if (!HasAuthority()) { continue; }
+
+			const float DistSq = FVector::DistSquared(GetActorLocation(), OtherPawn->GetActorLocation());
+			if (DistSq <= PlayerChallengeRadius * PlayerChallengeRadius)
+			{
+				RequestChallengePlayer(OtherPawn);
+				break;
+			}
+		}
+	}
 }
 
 void AVehicleExamplePawn::Steering(const FInputActionValue& Value)
@@ -376,6 +446,114 @@ void AVehicleExamplePawn::FlippedCheck()
 		// we're upright. reset the flipped check flag
 		bPreviousFlipCheck = false;
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Player-vs-Player challenge system
+// ---------------------------------------------------------------------------
+
+void AVehicleExamplePawn::RequestChallengePlayer(AVehicleExamplePawn* TargetPawn)
+{
+	if (!TargetPawn || TargetPawn == this) { return; }
+	bHasOutgoingChallenge = true;
+	Server_RequestChallenge(TargetPawn);
+}
+
+void AVehicleExamplePawn::Server_RequestChallenge_Implementation(AVehicleExamplePawn* TargetPawn)
+{
+	if (!TargetPawn || TargetPawn == this) { return; }
+
+	// Validate proximity on the server
+	const float Dist = FVector::Dist(GetActorLocation(), TargetPawn->GetActorLocation());
+	if (Dist > PlayerChallengeRadius * 2.f) { return; }
+
+	// Reject if either participant is already in a challenge
+	if (TargetPawn->PendingChallenger.IsValid()) { return; }
+
+	TargetPawn->PendingChallenger = this;
+	TargetPawn->Client_ReceiveChallengeRequest(this);
+}
+
+void AVehicleExamplePawn::RespondToChallenge(bool bAccepted)
+{
+	AVehicleExamplePawn* Challenger = PendingChallenger.Get();
+	if (!Challenger) { return; }
+	Server_RespondToChallenge(Challenger, bAccepted);
+}
+
+void AVehicleExamplePawn::Server_RespondToChallenge_Implementation(AVehicleExamplePawn* ChallengerPawn,
+                                                                    bool bAccepted)
+{
+	if (!ChallengerPawn) { return; }
+
+	// Clear state on both sides regardless of outcome
+	PendingChallenger = nullptr;
+	ChallengerPawn->bHasOutgoingChallenge = false;
+
+	if (bAccepted)
+	{
+		// Notify both participants so each client can start the race HUD
+		Client_OnChallengeAccepted(ChallengerPawn);
+		ChallengerPawn->Client_OnChallengeAccepted(this);
+	}
+	else
+	{
+		ChallengerPawn->Client_OnChallengeDeclined();
+	}
+}
+
+void AVehicleExamplePawn::Client_ReceiveChallengeRequest_Implementation(AVehicleExamplePawn* ChallengerPawn)
+{
+	// Only do anything meaningful for the locally-controlled pawn
+	if (!IsLocallyControlled()) { return; }
+	ShowPlayerChallengePrompt(ChallengerPawn);
+}
+
+void AVehicleExamplePawn::Client_OnChallengeAccepted_Implementation(AVehicleExamplePawn* OpponentPawn)
+{
+	if (!IsLocallyControlled()) { return; }
+	HidePlayerChallengePrompt();
+	// The game mode handles the actual race start server-side; here we just
+	// dismiss the prompt so the HUD can show the race state.
+	UE_LOG(LogTemp, Log, TEXT("AVehicleExamplePawn: challenge accepted — opponent: %s"),
+		*GetNameSafe(OpponentPawn));
+}
+
+void AVehicleExamplePawn::Client_OnChallengeDeclined_Implementation()
+{
+	if (!IsLocallyControlled()) { return; }
+	bHasOutgoingChallenge = false;
+	UE_LOG(LogTemp, Log, TEXT("AVehicleExamplePawn: challenge was declined"));
+}
+
+void AVehicleExamplePawn::ShowPlayerChallengePrompt(AVehicleExamplePawn* ChallengerPawn)
+{
+	HidePlayerChallengePrompt();
+
+	const FText ChallengeName = FText::FromString(GetNameSafe(ChallengerPawn));
+
+	PlayerChallengeWidget = SNew(SChallengePromptWidget)
+		.ChallengerName(ChallengeName)
+		.OnResponse_Lambda([this](bool bAccepted)
+		{
+			HidePlayerChallengePrompt();
+			RespondToChallenge(bAccepted);
+		});
+
+	if (GEngine && GEngine->GameViewport)
+	{
+		GEngine->GameViewport->AddViewportWidgetContent(
+			PlayerChallengeWidget.ToSharedRef(), /*ZOrder=*/10);
+	}
+}
+
+void AVehicleExamplePawn::HidePlayerChallengePrompt()
+{
+	if (PlayerChallengeWidget.IsValid() && GEngine && GEngine->GameViewport)
+	{
+		GEngine->GameViewport->RemoveViewportWidgetContent(PlayerChallengeWidget.ToSharedRef());
+	}
+	PlayerChallengeWidget.Reset();
 }
 
 #undef LOCTEXT_NAMESPACE

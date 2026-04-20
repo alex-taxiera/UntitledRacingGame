@@ -11,6 +11,7 @@ class UTextureRenderTarget2D;
 class UPerkData;
 
 DECLARE_DELEGATE(FOnEnterRaceRequested);
+DECLARE_DELEGATE(FOnFindMatchRequested);
 DECLARE_DELEGATE(FOnMenuRequested);
 DECLARE_DELEGATE(FOnSystemMenuRequested);
 
@@ -21,13 +22,13 @@ DECLARE_DELEGATE(FOnSystemMenuRequested);
  *
  * Layout:
  *   ????????????????????????????????????????????????????
- *   ?  [3D Render Target — current vehicle]            ?
+ *   ?  [3D Render Target ï¿½ current vehicle]            ?
  *   ?  Vehicle Name                                    ?
  *   ????????????????????????????????????????????????????
- *   ?  Currency: ¥ xxx     ?  Skill Slots              ?
+ *   ?  Currency: ï¿½ xxx     ?  Skill Slots              ?
  *   ?  Points:   xxx       ?  [Slot 1: PerkName] [X]   ?
  *   ?                      ?  [Slot 2: PerkName] [X]   ?
- *   ?                      ?  [Slot 3: — empty —  ]    ?
+ *   ?                      ?  [Slot 3: ï¿½ empty ï¿½  ]    ?
  *   ????????????????????????????????????????????????????
  *   ?  [MENU]                          [ENTER RACE]    ?
  *   ????????????????????????????????????????????????????
@@ -43,6 +44,7 @@ public:
         SLATE_ARGUMENT(URacingGameInstance*,    GameInstance)
         SLATE_ARGUMENT(UTextureRenderTarget2D*, RenderTarget)
         SLATE_EVENT(FOnEnterRaceRequested, OnEnterRaceRequested)
+        SLATE_EVENT(FOnFindMatchRequested,  OnFindMatchRequested)
         SLATE_EVENT(FOnMenuRequested,       OnMenuRequested)
         SLATE_EVENT(FOnSystemMenuRequested, OnSystemMenuRequested)
     SLATE_END_ARGS()
@@ -52,13 +54,22 @@ public:
     /** Re-binds the preview brush to a newly available render target. */
     void SetRenderTarget(UTextureRenderTarget2D* RT);
 
+    /** Called by SHubRootWidget when the session search finishes (success or fail). */
+    void OnMatchSearchComplete(bool bSuccess)
+    {
+        bSearchingForMatch = false;
+    }
+
 private:
 
     TWeakObjectPtr<URacingGameInstance>    GameInstance;
     TWeakObjectPtr<UTextureRenderTarget2D> RenderTarget;
     FOnEnterRaceRequested OnEnterRaceRequested;
+    FOnFindMatchRequested OnFindMatchRequested;
     FOnMenuRequested      OnMenuRequested;
     FOnSystemMenuRequested OnSystemMenuRequested;
+
+    bool bSearchingForMatch = false;
 
     FSlateBrush PreviewBrush;
     void RefreshPreviewBrush();

@@ -9,7 +9,6 @@
 #include "Widgets/Input/SButton.h"
 #include "Widgets/SBoxPanel.h"
 #include "Styling/CoreStyle.h"
-#include "HAL/PlatformMisc.h"
 
 namespace SystemMenuLayout
 {
@@ -174,7 +173,10 @@ FReply SHubSystemOverlay::OnReturnToTitleClicked()
 
 FReply SHubSystemOverlay::OnExitGameClicked()
 {
-    FPlatformMisc::RequestExit(false);
+    if (GEngine)
+    {
+        GEngine->DeferredCommands.Add(TEXT("quit"));
+    }
     return FReply::Handled();
 }
 
