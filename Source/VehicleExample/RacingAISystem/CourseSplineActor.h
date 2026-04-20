@@ -17,7 +17,7 @@ class URacingSplineComponent;
  * Draw the spline points along your road mesh.  Enable Closed Loop on each.
  *
  * At runtime the spawn manager calls GetSplineByName() or GetRandomSpline()
- * to assign a patrol path to each NPC.  No configuration in C++ needed —
+ * to assign a patrol path to each NPC.  No configuration in C++ needed ï¿½
  * just add and draw components in the editor.
  */
 UCLASS(BlueprintType, Blueprintable)
@@ -31,7 +31,7 @@ public:
 
     /**
      * Returns the URacingSplineComponent whose name matches Name, or nullptr.
-     * Searches all components attached to this actor — no pre-registration needed.
+     * Searches all components attached to this actor ï¿½ no pre-registration needed.
      */
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Course Splines")
     URacingSplineComponent* GetSplineByName(FName Name) const;
@@ -43,4 +43,12 @@ public:
     /** Returns a random URacingSplineComponent, or nullptr if none exist. */
     UFUNCTION(BlueprintCallable, Category = "Course Splines")
     URacingSplineComponent* GetRandomSpline() const;
+
+    /**
+     * Returns all URacingSplineComponents on this actor, sorted ascending by
+     * LaneIndex.  The sorted order lets callers treat adjacent elements as
+     * neighbouring lanes without any spatial proximity calculation.
+     */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Course Splines")
+    TArray<URacingSplineComponent*> GetAllSplines() const;
 };

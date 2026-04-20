@@ -353,6 +353,52 @@ struct FAIDifficultyOverride
 };
 
 // ---------------------------------------------------------------------------
+// Lane Driving Config
+// ---------------------------------------------------------------------------
+
+/**
+ * Lane-following and obstacle-avoidance tuning embedded in FRacingAIConfig.
+ *
+ * The NPC drives its CurrentLaneSpline (picked from the CourseSplineActor it
+ * was assigned) rather than the raw spline centerline.  When an obstacle is
+ * detected ahead, EvaluateLaneChange() selects the clearest sibling lane and
+ * begins a smooth blend transition.
+ */
+USTRUCT(BlueprintType)
+struct FLaneConfig
+{
+    GENERATED_BODY()
+
+    /**
+     * Time in seconds to blend steering from the old lane to the new one.
+     * During this window ComputeSplineSteeringInput lerps between the two
+     * lane results so the path change is smooth rather than a snap.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Lane",
+        meta = (ClampMin = "0.1"))
+    float LaneChangeDurationSec = 1.5f;
+
+    /**
+     * How far ahead (cm) to sweep for blocking vehicles when evaluating
+     * whether a lane change is needed.  Should be at least one car-length
+     * of reaction distance at patrol speed (~1500 cm covers ~1 second at
+     * 35 MPH).
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Lane",
+        meta = (ClampMin = "100.0"))
+    float ObstacleLookaheadCm = 1500.0f;
+
+    /**
+     * Radius (cm) of the capsule sweep used to detect blocking vehicles.
+     * Should be roughly half a lane width so the sweep catches cars that
+     * share the lane without triggering on cars in adjacent lanes.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Lane",
+        meta = (ClampMin = "10.0"))
+    float ObstacleSweepRadiusCm = 180.0f;
+};
+
+// ---------------------------------------------------------------------------
 // Racing AI Config  (embedded in UNPCRacerData)
 // ---------------------------------------------------------------------------
 
@@ -461,6 +507,10 @@ struct FRacingAIConfig
     /** How this NPC reads and responds to upcoming corners in the spline. */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Cornering")
     FCorneringConfig CorneringConfig;
+
+    /** Lane-following and obstacle-avoidance settings. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Lane")
+    FLaneConfig LaneConfig;
 
     // -----------------------------------------------------------------------
     // Per-NPC Difficulty Override

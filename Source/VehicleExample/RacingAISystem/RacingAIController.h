@@ -22,9 +22,9 @@ class UChaosWheeledVehicleMovementComponent;
  * to the player's vehicle.
  *
  * Architecture: C++ state machine
- *   UpdateContext()  — reads world state into FRacingAIContext each reaction tick
- *   EvaluateState()  — checks behavior rules, rolls probability, sets active states
- *   ExecuteState()   — converts active state set into throttle/steering/brake inputs
+ *   UpdateContext()  ï¿½ reads world state into FRacingAIContext each reaction tick
+ *   EvaluateState()  ï¿½ checks behavior rules, rolls probability, sets active states
+ *   ExecuteState()   ï¿½ converts active state set into throttle/steering/brake inputs
  *   Cornering acts as a modifier layer on top of every primary state.
  *
  * How to use:
@@ -162,13 +162,41 @@ private:
     UPROPERTY()
     TObjectPtr<URacingSplineComponent> PatrolSpline;
 
+    // -----------------------------------------------------------------------
+    // Lane driving state
+    // -----------------------------------------------------------------------
+
+    /**
+     * The lane spline the NPC is currently driving along.
+     * Initialized to PatrolSpline (or RacingSpline) in StartIdle()/StartRace().
+     * EvaluateLaneChange() may swap this to a sibling spline on the same
+     * CourseSplineActor when an obstacle is detected ahead.
+     */
+    UPROPERTY()
+    TObjectPtr<URacingSplineComponent> CurrentLaneSpline;
+
+    /**
+     * The lane spline the NPC was driving before the most recent lane change.
+     * Non-null only while a blend transition is in progress.
+     * Cleared when LaneBlendAlpha reaches 1.0.
+     */
+    UPROPERTY()
+    TObjectPtr<URacingSplineComponent> PreviousLaneSpline;
+
+    /**
+     * 0-to-1 progress of the current lane-change blend.
+     * 0 = steering fully on PreviousLaneSpline; 1 = fully on CurrentLaneSpline.
+     * Advanced every frame by TickLaneBlend().
+     */
+    float LaneBlendAlpha = 1.0f;
+
     UPROPERTY()
     TObjectPtr<AVehicleExamplePawn> PlayerPawn;
 
     UPROPERTY()
     TObjectPtr<AVehicleExamplePawn> OwnPawn;
 
-    /** Active state set — multiple states can be simultaneously active. */
+    /** Active state set ï¿½ multiple states can be simultaneously active. */
     TSet<ERacingAIState> ActiveStates;
 
     /** Per-state duration timers (seconds remaining while the state is active). */
@@ -189,7 +217,7 @@ private:
     /** Effective reaction time after difficulty scaling. */
     float EffectiveReactionTime = 0.25f;
 
-    /** Effective aggression scale after difficulty scaling (0–1). */
+    /** Effective aggression scale after difficulty scaling (0ï¿½1). */
     float EffectiveAggressionScale = 0.5f;
 
     /** Effective rubber-band throttle bonus scale after difficulty scaling. */
@@ -238,9 +266,25 @@ private:
     void Execute_Nitro();
 
     /**
+     * Advances LaneBlendAlpha toward 1.0 each frame.
+     * Clears PreviousLaneSpline once the transition completes.
+     * Called from Tick() before ExecuteState() so steering inputs always
+     * use an up-to-date blend weight.
+     */
+    void TickLaneBlend(float DeltaSeconds);
+
+    /**
+     * Checks whether any AVehicleExamplePawn is blocking the NPC's current
+     * lane ahead and, if so, picks the clearest sibling lane from the same
+     * CourseSplineActor and begins a lane-change transition.
+     * Called at reaction-tick rate from UpdateContext().
+     */
+    void EvaluateLaneChange();
+
+    /**
      * Reduces throttle and applies brakes proportionally when the NPC is
      * over the configured corner speed limit.  Also blends steering toward
-     * the spline tangent.  OutBrake is additive — call site should clamp 0-1.
+     * the spline tangent.  OutBrake is additive ï¿½ call site should clamp 0-1.
      */
     void ApplyCorneringModifier(float& OutThrottle, float& OutSteering, float& OutBrake) const;
     void ApplyRubberBand(float& OutThrottle) const;

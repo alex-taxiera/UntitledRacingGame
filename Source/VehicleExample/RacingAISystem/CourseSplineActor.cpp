@@ -34,6 +34,17 @@ TArray<FName> ACourseSplineActor::GetAllSplineNames() const
     return Names;
 }
 
+TArray<URacingSplineComponent*> ACourseSplineActor::GetAllSplines() const
+{
+    TArray<URacingSplineComponent*> Found;
+    GetComponents<URacingSplineComponent>(Found);
+    Found.Sort([](const URacingSplineComponent& A, const URacingSplineComponent& B)
+    {
+        return A.LaneIndex < B.LaneIndex;
+    });
+    return Found;
+}
+
 URacingSplineComponent* ACourseSplineActor::GetRandomSpline() const
 {
     TArray<URacingSplineComponent*> Found;

@@ -37,6 +37,20 @@ public:
     URacingSplineComponent();
 
     // -----------------------------------------------------------------------
+    // Lane grouping
+    // -----------------------------------------------------------------------
+
+    /**
+     * Index of this lane within its CourseSplineActor group.
+     * 0 = leftmost lane, increasing rightward relative to the travel direction.
+     * Trusted as correct by the AI — no spatial validation is performed.
+     * Used by EvaluateLaneChange() to tiebreak between equally clear candidates:
+     * the rightmost available lane is preferred (standard road driving convention).
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lane")
+    int32 LaneIndex = 0;
+
+    // -----------------------------------------------------------------------
     // Racing-line queries
     // -----------------------------------------------------------------------
 
