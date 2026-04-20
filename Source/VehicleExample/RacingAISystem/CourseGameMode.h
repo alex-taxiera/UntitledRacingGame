@@ -54,6 +54,9 @@ public:
     /** Called when a new player controller logs into the server. */
     virtual void PostLogin(APlayerController* NewPlayer) override;
 
+    /** Called when a player disconnects — destroys their pawn so it doesn't linger. */
+    virtual void Logout(AController* Exiting) override;
+
     UFUNCTION(BlueprintCallable, Category = "Course")
     void OnBattleEnded();
 
@@ -193,6 +196,8 @@ private:
      * Finds a good spawn transform for a newly-joined player.
      * Picks the spline point closest to the centroid of all existing players,
      * then offsets perpendicular to the spline so they don't overlap.
+     * ExcludePC is skipped when building the centroid (it's the joining player,
+     * already at PlayerStart, and would skew the result toward that location).
      */
-    FTransform GetSpawnTransformForJoiningPlayer() const;
+    FTransform GetSpawnTransformForJoiningPlayer(APlayerController* ExcludePC = nullptr) const;
 };

@@ -110,6 +110,9 @@ public:
 	/** Initialization */
 	virtual void BeginPlay() override;
 
+	/** Called on the owning client when this pawn is (re)started — ensures game-only input mode. */
+	virtual void PawnClientRestart() override;
+
 	/** Cleanup */
 	virtual void EndPlay(EEndPlayReason::Type EndPlayReason) override;
 

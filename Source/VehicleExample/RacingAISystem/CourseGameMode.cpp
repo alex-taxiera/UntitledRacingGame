@@ -766,8 +766,20 @@ void ACourseGameMode::LogVehicleDiagnostics()
 }
 
 // ---------------------------------------------------------------------------
-// Multiplayer: PostLogin — spawn joining player near existing players
+// Multiplayer: PostLogin / Logout
 // ---------------------------------------------------------------------------
+
+void ACourseGameMode::Logout(AController* Exiting)
+{
+    // Destroy the departing player's pawn before the controller is unregistered
+    // so it doesn't linger as a driverless ghost in the world.
+    if (APawn* Pawn = Exiting ? Exiting->GetPawn() : nullptr)
+    {
+        Pawn->Destroy();
+    }
+
+    Super::Logout(Exiting);
+}
 
 void ACourseGameMode::PostLogin(APlayerController* NewPlayer)
 {
@@ -789,19 +801,24 @@ void ACourseGameMode::PostLogin(APlayerController* NewPlayer)
         APawn* Pawn = NewPlayer ? NewPlayer->GetPawn() : nullptr;
         if (!Pawn) { return; }
 
-        const FTransform SpawnT = GetSpawnTransformForJoiningPlayer();
+        // Pass NewPlayer so the centroid is built from pre-existing players only —
+        // the joining player is already at PlayerStart and would skew the result.
+        const FTransform SpawnT = GetSpawnTransformForJoiningPlayer(NewPlayer);
         Pawn->TeleportTo(SpawnT.GetLocation(), SpawnT.GetRotation().Rotator(), false, true);
     });
 }
 
-FTransform ACourseGameMode::GetSpawnTransformForJoiningPlayer() const
+FTransform ACourseGameMode::GetSpawnTransformForJoiningPlayer(APlayerController* ExcludePC) const
 {
-    // 1. Collect all existing player pawn locations
+    // 1. Collect existing player pawn locations, skipping the joining player.
+    //    The joining player was just spawned at PlayerStart by Super::PostLogin;
+    //    including them would drag the centroid toward PlayerStart.
     TArray<FVector> ExistingLocations;
     for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
     {
         APlayerController* PC = It->Get();
-        if (PC && PC->GetPawn())
+        if (!PC || PC == ExcludePC) { continue; }
+        if (PC->GetPawn())
         {
             ExistingLocations.Add(PC->GetPawn()->GetActorLocation());
         }

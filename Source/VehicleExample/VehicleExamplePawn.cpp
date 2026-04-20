@@ -27,6 +27,10 @@ AVehicleExamplePawn::AVehicleExamplePawn()
 	bReplicates = true;
 	SetReplicatingMovement(true);
 
+	// Send position updates at 60 Hz so simulated proxies see smooth movement.
+	NetUpdateFrequency    = 60.f;
+	MinNetUpdateFrequency = 30.f;
+
 	// construct the front camera boom
 	FrontSpringArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("Front Spring Arm"));
 	FrontSpringArm->SetupAttachment(GetMesh());
@@ -106,6 +110,19 @@ void AVehicleExamplePawn::BeginPlay()
 {
 	Super::BeginPlay();
 
+	// Simulated proxies that are NOT locally controlled (i.e. NPC pawns and other
+	// players' cars seen from a remote client) must not run local Chaos physics.
+	// Their position is driven by the replicated transform.  Without this, the
+	// AI's constant steering input causes the NPC pawn's local simulation to
+	// diverge from the server state and snap visibly.
+	// The joining player's own pawn is ROLE_AutonomousProxy, not SimulatedProxy,
+	// so this block does not affect it.
+	if (GetLocalRole() == ROLE_SimulatedProxy)
+	{
+		GetMesh()->SetSimulatePhysics(false);
+		return;
+	}
+
 	// set up the flipped check timer
 	GetWorld()->GetTimerManager().SetTimer(FlipCheckTimer, this, &AVehicleExamplePawn::FlippedCheck, FlipCheckTime, true);
 
@@ -129,6 +146,21 @@ void AVehicleExamplePawn::BeginPlay()
 	});
 }
 
+void AVehicleExamplePawn::PawnClientRestart()
+{
+	Super::PawnClientRestart();
+
+	// SetInputMode called in ACourseGameMode::PostLogin runs on the server's proxy
+	// of the joining controller and never reaches the actual client.  Call it here
+	// on the owning client so vehicle input works immediately after possession.
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	if (PC && PC->IsLocalController())
+	{
+		PC->SetInputMode(FInputModeGameOnly());
+		PC->bShowMouseCursor = false;
+	}
+}
+
 void AVehicleExamplePawn::EndPlay(EEndPlayReason::Type EndPlayReason)
 {
 	// clear the flipped check timer
@@ -141,6 +173,9 @@ void AVehicleExamplePawn::Tick(float Delta)
 {
 	Super::Tick(Delta);
 
+	// SimulatedProxy pawns have no local physics or input — skip all gameplay logic.
+	if (GetLocalRole() == ROLE_SimulatedProxy) { return; }
+
 	// add some angular damping if the vehicle is in midair
 	bool bMovingOnGround = ChaosVehicleMovement->IsMovingOnGround();
 	GetMesh()->SetAngularDamping(bMovingOnGround ? 0.0f : 3.0f);
@@ -148,8 +183,34 @@ void AVehicleExamplePawn::Tick(float Delta)
 	// realign the camera yaw to face front
 	float CameraYaw = BackSpringArm->GetRelativeRotation().Yaw;
 	CameraYaw = FMath::FInterpTo(CameraYaw, 0.0f, Delta, 1.0f);
-
 	BackSpringArm->SetRelativeRotation(FRotator(0.0f, CameraYaw, 0.0f));
+
+	// PvP proximity challenge: scan for nearby player pawns and auto-request a
+	// challenge when one enters the radius.  Only runs on the locally-controlled
+	// pawn so each client handles their own side independently.
+	if (IsLocallyControlled() && !bHasOutgoingChallenge && !PendingChallenger.IsValid())
+	{
+		for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+		{
+			APlayerController* OtherPC = It->Get();
+			if (!OtherPC) { continue; }
+
+			AVehicleExamplePawn* OtherPawn = Cast<AVehicleExamplePawn>(OtherPC->GetPawn());
+			if (!OtherPawn || OtherPawn == this) { continue; }
+			// Only challenge pawns that are also locally controlled from this client's
+			// perspective (i.e. this is the server iterating its controllers).
+			// On the listen-server host both controllers exist locally, so we use
+			// HasAuthority() as the guard — only the server initiates the RPC.
+			if (!HasAuthority()) { continue; }
+
+			const float DistSq = FVector::DistSquared(GetActorLocation(), OtherPawn->GetActorLocation());
+			if (DistSq <= PlayerChallengeRadius * PlayerChallengeRadius)
+			{
+				RequestChallengePlayer(OtherPawn);
+				break;
+			}
+		}
+	}
 }
 
 void AVehicleExamplePawn::Steering(const FInputActionValue& Value)

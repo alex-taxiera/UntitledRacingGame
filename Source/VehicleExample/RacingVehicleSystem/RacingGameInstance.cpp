@@ -8,6 +8,7 @@
 #include "VehicleDefinition.h"
 #include "OnlineSubsystem.h"
 #include "OnlineSessionSettings.h"
+#include "Misc/CommandLine.h"
 
 const int32 URacingGameInstance::StartingCurrency = 10000000;
 
@@ -18,6 +19,14 @@ URacingGameInstance::URacingGameInstance()
 void URacingGameInstance::Init()
 {
     Super::Init();
+
+    // Apply -SaveSlot=<Name> command-line override if provided.
+    FString CmdSlot;
+    if (FParse::Value(FCommandLine::Get(), TEXT("SaveSlot="), CmdSlot) && !CmdSlot.IsEmpty())
+    {
+        ActiveSaveSlot = CmdSlot;
+        UE_LOG(LogTemp, Log, TEXT("URacingGameInstance::Init — save slot set from command line: '%s'"), *ActiveSaveSlot);
+    }
 
     VehicleInventory = NewObject<UVehicleInventory>(this, TEXT("VehicleInventory"));
     VehicleInventory->AllVehicles = AllVehicles;
@@ -40,7 +49,7 @@ URacingGameInstance* URacingGameInstance::Get(const UObject* WorldContextObject)
 
 bool URacingGameInstance::HasSaveGame() const
 {
-    return URacingSaveGame::DoesSaveExist();
+    return UGameplayStatics::DoesSaveGameExist(ActiveSaveSlot, URacingSaveGame::UserIndex);
 }
 
 void URacingGameInstance::SaveGame()
@@ -89,7 +98,7 @@ void URacingGameInstance::SaveGame()
         }
     }
 
-    UGameplayStatics::SaveGameToSlot(Save, URacingSaveGame::SlotName, URacingSaveGame::UserIndex);
+    UGameplayStatics::SaveGameToSlot(Save, ActiveSaveSlot, URacingSaveGame::UserIndex);
 }
 
 void URacingGameInstance::LoadGame()
@@ -97,7 +106,7 @@ void URacingGameInstance::LoadGame()
     if (!HasSaveGame()) { return; }
 
     URacingSaveGame* Save = Cast<URacingSaveGame>(
-        UGameplayStatics::LoadGameFromSlot(URacingSaveGame::SlotName, URacingSaveGame::UserIndex));
+        UGameplayStatics::LoadGameFromSlot(ActiveSaveSlot, URacingSaveGame::UserIndex));
 
     if (!Save) { return; }
 
@@ -164,7 +173,7 @@ void URacingGameInstance::LoadGame()
 
 void URacingGameInstance::DeleteSave()
 {
-    UGameplayStatics::DeleteGameInSlot(URacingSaveGame::SlotName, URacingSaveGame::UserIndex);
+    UGameplayStatics::DeleteGameInSlot(ActiveSaveSlot, URacingSaveGame::UserIndex);
 
     // Reset in-memory state to defaults
     VehicleInventory->PlayerCurrency = 0;
@@ -208,7 +217,8 @@ void URacingGameInstance::ContinueGame()
 void URacingGameInstance::StartCourse()
 {
     SaveGame();
-    UGameplayStatics::OpenLevel(this, CourseLevelName);
+    // Open as a listen server so other players on the LAN can discover and join.
+    UGameplayStatics::OpenLevel(this, CourseLevelName, true, TEXT("?listen"));
 }
 
 void URacingGameInstance::ReturnToTitle()

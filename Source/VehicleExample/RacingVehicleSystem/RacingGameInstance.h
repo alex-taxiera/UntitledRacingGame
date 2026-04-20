@@ -207,6 +207,23 @@ public:
     /** True while a LAN session search is running. */
     bool IsSearchingForSession() const { return bSearchingForSession; }
 
+    // -----------------------------------------------------------------------
+    // Save profile / slot management
+    // -----------------------------------------------------------------------
+
+    /**
+     * The save slot currently in use for all save/load/delete operations.
+     * Defaults to "RacingSave" (slot 1).  Set via SetActiveSaveSlot() or the
+     * -SaveSlot=<Name> command-line argument at startup.
+     */
+    const FString& GetActiveSaveSlot() const { return ActiveSaveSlot; }
+
+    /** Switch to a different save slot.  Does not load the new slot automatically. */
+    void SetActiveSaveSlot(const FString& NewSlot)
+    {
+        ActiveSaveSlot = NewSlot.IsEmpty() ? URacingSaveGame::SlotName : NewSlot;
+    }
+
     /**
      * Fired when FindCourseSessions completes.
      * bool param = true if at least one session was found.
@@ -216,6 +233,9 @@ public:
     FOnSessionsFound OnSessionsFound;
 
 private:
+
+    /** Active save slot name — all save/load ops use this. */
+    FString ActiveSaveSlot = URacingSaveGame::SlotName;
 
     bool bSearchingForSession = false;
 

@@ -84,13 +84,95 @@ void STitleScreenWidget::Construct(const FArguments& InArgs)
                 + SVerticalBox::Slot()
                 .AutoHeight()
                 .HAlign(HAlign_Center)
-                .Padding(FMargin(0.0f, 0.0f, 0.0f, 48.0f))
+                .Padding(FMargin(0.0f, 0.0f, 0.0f, 32.0f))
                 [
                     SNew(STextBlock)
                     .Text(NSLOCTEXT("TitleScreen", "Title", "UNTITLED RACING GAME"))
                     .Font(FCoreStyle::GetDefaultFontStyle("Bold",
                         (int32)TitleScreenLayout::TitleFontSize))
                     .ColorAndOpacity(FLinearColor::White)
+                ]
+
+                // Profile selector
+                + SVerticalBox::Slot()
+                .AutoHeight()
+                .HAlign(HAlign_Center)
+                .Padding(FMargin(0.0f, 0.0f, 0.0f, 24.0f))
+                [
+                    SNew(SVerticalBox)
+
+                    + SVerticalBox::Slot()
+                    .AutoHeight()
+                    .HAlign(HAlign_Center)
+                    .Padding(FMargin(0.0f, 0.0f, 0.0f, 6.0f))
+                    [
+                        SNew(STextBlock)
+                        .Text(NSLOCTEXT("TitleScreen", "ProfileLabel", "PROFILE"))
+                        .Font(FCoreStyle::GetDefaultFontStyle("Regular",
+                            (int32)TitleScreenLayout::SmallFontSize))
+                        .ColorAndOpacity(FLinearColor(0.55f, 0.55f, 0.55f))
+                    ]
+
+                    + SVerticalBox::Slot()
+                    .AutoHeight()
+                    .HAlign(HAlign_Center)
+                    [
+                        SNew(SHorizontalBox)
+
+                        + SHorizontalBox::Slot().AutoWidth().Padding(FMargin(4.f, 0.f))
+                        [
+                            SNew(SBox).WidthOverride(84.f).HeightOverride(36.f)
+                            [
+                                SNew(SButton)
+                                .ButtonStyle(&GetMenuButtonStyle())
+                                .OnClicked(this, &STitleScreenWidget::OnSlotClicked, FString(TEXT("RacingSave")))
+                                .HAlign(HAlign_Center).VAlign(VAlign_Center)
+                                [
+                                    SNew(STextBlock)
+                                    .Text(NSLOCTEXT("TitleScreen", "Slot1", "SLOT 1"))
+                                    .Font(FCoreStyle::GetDefaultFontStyle("Bold", 13))
+                                    .ColorAndOpacity(TAttribute<FSlateColor>(this,
+                                        &STitleScreenWidget::GetSlot1Color))
+                                ]
+                            ]
+                        ]
+
+                        + SHorizontalBox::Slot().AutoWidth().Padding(FMargin(4.f, 0.f))
+                        [
+                            SNew(SBox).WidthOverride(84.f).HeightOverride(36.f)
+                            [
+                                SNew(SButton)
+                                .ButtonStyle(&GetMenuButtonStyle())
+                                .OnClicked(this, &STitleScreenWidget::OnSlotClicked, FString(TEXT("RacingSave2")))
+                                .HAlign(HAlign_Center).VAlign(VAlign_Center)
+                                [
+                                    SNew(STextBlock)
+                                    .Text(NSLOCTEXT("TitleScreen", "Slot2", "SLOT 2"))
+                                    .Font(FCoreStyle::GetDefaultFontStyle("Bold", 13))
+                                    .ColorAndOpacity(TAttribute<FSlateColor>(this,
+                                        &STitleScreenWidget::GetSlot2Color))
+                                ]
+                            ]
+                        ]
+
+                        + SHorizontalBox::Slot().AutoWidth().Padding(FMargin(4.f, 0.f))
+                        [
+                            SNew(SBox).WidthOverride(84.f).HeightOverride(36.f)
+                            [
+                                SNew(SButton)
+                                .ButtonStyle(&GetMenuButtonStyle())
+                                .OnClicked(this, &STitleScreenWidget::OnSlotClicked, FString(TEXT("RacingSave3")))
+                                .HAlign(HAlign_Center).VAlign(VAlign_Center)
+                                [
+                                    SNew(STextBlock)
+                                    .Text(NSLOCTEXT("TitleScreen", "Slot3", "SLOT 3"))
+                                    .Font(FCoreStyle::GetDefaultFontStyle("Bold", 13))
+                                    .ColorAndOpacity(TAttribute<FSlateColor>(this,
+                                        &STitleScreenWidget::GetSlot3Color))
+                                ]
+                            ]
+                        ]
+                    ]
                 ]
 
                 // New Game
@@ -298,6 +380,15 @@ FReply STitleScreenWidget::OnExitClicked()
     return FReply::Handled();
 }
 
+FReply STitleScreenWidget::OnSlotClicked(FString SlotName)
+{
+    if (URacingGameInstance* GI = GameInstance.Get())
+    {
+        GI->SetActiveSaveSlot(SlotName);
+    }
+    return FReply::Handled();
+}
+
 // ---------------------------------------------------------------------------
 // Attribute bindings
 // ---------------------------------------------------------------------------
@@ -327,6 +418,16 @@ EVisibility STitleScreenWidget::GetMainButtonsVisibility() const
 // ---------------------------------------------------------------------------
 // Style helpers
 // ---------------------------------------------------------------------------
+
+FSlateColor STitleScreenWidget::GetSlotButtonColor(const FString& SlotName) const
+{
+    const URacingGameInstance* GI = GameInstance.Get();
+    if (GI && GI->GetActiveSaveSlot() == SlotName)
+    {
+        return FSlateColor(FLinearColor(0.2f, 0.7f, 1.0f)); // active: bright blue
+    }
+    return FSlateColor(FLinearColor(0.6f, 0.6f, 0.6f));     // inactive: grey
+}
 
 const FButtonStyle& STitleScreenWidget::GetMenuButtonStyle()
 {
