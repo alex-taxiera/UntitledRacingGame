@@ -148,7 +148,7 @@ void ARacingAIController::OnUnPossess()
 }
 
 // ---------------------------------------------------------------------------
-// Tick — gates on reaction time
+// Tick ï¿½ gates on reaction time
 // ---------------------------------------------------------------------------
 
 // We override Tick via the standard AActor path.
@@ -213,7 +213,7 @@ void ARacingAIController::UpdateContext()
         Context.OwnGear     = Move->GetCurrentGear();
     }
 
-    // Nitro fraction — read from OwnedVehicle via pawn if available
+    // Nitro fraction ï¿½ read from OwnedVehicle via pawn if available
     // OwnedVehicle.CurrentNitro / EffectiveStats.NitroCapacity
     // For now we use a safe default; wire this up once the pawn exposes NitroFraction
     Context.OwnNitroFraction = 0.5f;
@@ -312,7 +312,7 @@ void ARacingAIController::EvaluateState()
         if (!CheckCondition(Rule.Condition, Rule.DistanceThreshold,
                             0.0f, Rule.NitroThreshold)) { continue; }
 
-        // No nitro left — skip
+        // No nitro left ï¿½ skip
         if (Context.OwnNitroFraction <= 0.0f) { continue; }
 
         const float EffectiveProbability = FMath::Clamp(
@@ -448,7 +448,7 @@ void ARacingAIController::ExecuteState()
 
 void ARacingAIController::Execute_Racing()
 {
-    // Baseline: full throttle, steer toward spline — handled in ExecuteState
+    // Baseline: full throttle, steer toward spline ï¿½ handled in ExecuteState
 }
 
 void ARacingAIController::Execute_Idle()
@@ -520,7 +520,7 @@ void ARacingAIController::Execute_Bumping(const FAggressionBehaviorRule& /*Rule*
 
 void ARacingAIController::Execute_Nitro()
 {
-    // Trigger nitro on the pawn — wire to actual nitro activation interface
+    // Trigger nitro on the pawn ï¿½ wire to actual nitro activation interface
     // when that system is exposed on AVehicleExamplePawn
     // e.g. OwnPawn->ActivateNitro();
 }
@@ -538,7 +538,7 @@ void ARacingAIController::ApplyCorneringModifier(float& OutThrottle, float& OutS
         const float PhysicsMaxSpeed = FMath::Sqrt(
             Cfg.AILateralAccelCmS2 / Context.UpcomingCurvature);
 
-        // Optional designer cap — use the lower of physics and cap (if cap is set)
+        // Optional designer cap ï¿½ use the lower of physics and cap (if cap is set)
         const float MaxSpeedCmS = (Cfg.MaxCornerSpeedCmS > 0.0f)
             ? FMath::Min(PhysicsMaxSpeed, Cfg.MaxCornerSpeedCmS)
             : PhysicsMaxSpeed;
@@ -594,7 +594,7 @@ void ARacingAIController::SetSteering(float Value)
 
 void ARacingAIController::SetBrake(float Value)
 {
-    // Do NOT use DoBrake — it unconditionally resets throttle to 0,
+    // Do NOT use DoBrake ï¿½ it unconditionally resets throttle to 0,
     // which is correct for player input but wrong for AI.
     if (OwnPawn && OwnPawn->GetChaosVehicleMovement())
     {
@@ -606,12 +606,41 @@ float ARacingAIController::ComputeSplineSteeringInput() const
 {
     if (!OwnPawn) { return 0.0f; }
 
-    // Cross product of pawn forward and spline tangent gives the signed lateral error
     const FVector PawnForward = OwnPawn->GetActorForwardVector();
-    const FVector Cross       = FVector::CrossProduct(PawnForward, Context.SplineTangent);
 
-    // Z component = signed turn direction (positive = turn right)
-    return FMath::Clamp(Cross.Z, -1.0f, 1.0f);
+    if (RacingSpline)
+    {
+        const FCorneringConfig& Cfg = RacerData
+            ? RacerData->AIConfig.CorneringConfig
+            : FCorneringConfig{};
+
+        // --- Component 1: Heading alignment ---
+        // Sample the spline *tangent* at the lookahead point rather than
+        // aiming at the point itself.  This tells the car which *direction*
+        // the track is heading further ahead, giving predictive turn-in for
+        // corners without dragging the car hard sideways when it is off-center
+        // (which is what caused the left-right hunting oscillation).
+        const FVector LookaheadTangent = RacingSpline->GetDirectionAtDistance(
+            Context.OwnSplineDistance + Cfg.SteeringLookaheadCm);
+        const float HeadingSteering = FVector::CrossProduct(PawnForward, LookaheadTangent).Z;
+
+        // --- Component 2: Lateral position correction ---
+        // A small proportional nudge toward the spline center so the car
+        // gradually drifts back when it wanders off line.  Using a separate
+        // low-gain signal instead of folding position into the heading avoids
+        // overshooting and oscillation: the car eases to center rather than
+        // snapping hard and overcorrecting.
+        const float LateralSteering = FMath::Clamp(
+            Context.OwnLateralOffsetCm / FMath::Max(Cfg.LateralCorrectionScaleCm, 1.0f),
+            -1.0f, 1.0f);
+
+        return FMath::Clamp(
+            HeadingSteering + Cfg.LateralCorrectionWeight * LateralSteering,
+            -1.0f, 1.0f);
+    }
+
+    // Fallback when no spline is present: align with cached tangent.
+    return FMath::Clamp(FVector::CrossProduct(PawnForward, Context.SplineTangent).Z, -1.0f, 1.0f);
 }
 
 float ARacingAIController::ComputeLateralToPlayer() const
