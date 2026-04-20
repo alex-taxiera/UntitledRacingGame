@@ -186,9 +186,11 @@ void AVehicleExamplePawn::Tick(float Delta)
 	BackSpringArm->SetRelativeRotation(FRotator(0.0f, CameraYaw, 0.0f));
 
 	// PvP proximity challenge: scan for nearby player pawns and auto-request a
-	// challenge when one enters the radius.  Only runs on the locally-controlled
-	// pawn so each client handles their own side independently.
-	if (IsLocallyControlled() && !bHasOutgoingChallenge && !PendingChallenger.IsValid())
+	// challenge when one enters the radius.  Only runs on human-controlled pawns
+	// (AI controllers also satisfy IsLocallyControlled on the server, so we must
+	// explicitly require a PlayerController to avoid NPC pawns triggering this).
+	if (IsLocallyControlled() && Cast<APlayerController>(GetController())
+		&& !bHasOutgoingChallenge && !PendingChallenger.IsValid())
 	{
 		for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
 		{

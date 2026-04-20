@@ -9,7 +9,6 @@
 #include "Widgets/Input/SButton.h"
 #include "Widgets/SBoxPanel.h"
 #include "Styling/CoreStyle.h"
-#include "HAL/PlatformMisc.h"
 
 // ---------------------------------------------------------------------------
 // Layout constants
@@ -376,7 +375,10 @@ FReply STitleScreenWidget::OnCancelDeleteClicked()
 
 FReply STitleScreenWidget::OnExitClicked()
 {
-    FPlatformMisc::RequestExit(false);
+    if (GEngine)
+    {
+        GEngine->DeferredCommands.Add(TEXT("quit"));
+    }
     return FReply::Handled();
 }
 
